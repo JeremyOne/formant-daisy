@@ -711,6 +711,19 @@ void FormantSinger::updateControl()
     vizF3.store (cur.F[2] * (float) shift);
     vizVoicing.store (cur.av * velGain);
     vizNoise.store (std::max (cur.af, cur.ah));
+    // noise shape of the consonant being made (its target, so the display doesn't
+    // slide through in-between frequencies); held while the hiss fades out
+    if (t.af > 0.01f)
+    {
+        const float w1 = t.fr1a + 1.0e-4f, w2 = t.fr2a;
+        const float centre = (t.fr1f * w1 + t.fr2f * w2) / (w1 + w2);
+        // wide bandwidths and the flat bypass path spread the hiss out
+        const float bwOct = (t.fr1b / std::max (100.0f, t.fr1f)) * 1.4f + t.byp * 6.0f;
+        vizFricHz.store (centre * (float) shift);
+        vizFricSpread.store (std::clamp (bwOct, 0.2f, 2.5f));
+    }
+    vizFric.store (cur.af);
+    vizAsp.store (cur.ah);
     vizPhoneme.store (seg.ph);
 }
 

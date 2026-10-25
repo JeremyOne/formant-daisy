@@ -30,7 +30,8 @@ inline juce::Colour grilleLight { 0xff2f6b5a };
 inline juce::Colour pupil { 0xff10304a };
 inline juce::Colour white { 0xffffffff };
 
-// 0 = Daisy (default), 1 = Amber Terminal, 2 = Pocket Green, 3 = Synthwave
+// 0 Daisy (default), 1 Amber Terminal, 2 Pocket Green, 3 Synthwave, 4 Hazy Vaporwave,
+// 5 Neutral, 6 Happy Feet, 7 Tam & Zpet, 8 A House of Bees, 9 Sports Day
 void applyTheme (int id);
 } // namespace Palette
 
@@ -83,7 +84,7 @@ public:
     void setShowHelp (bool show) { showHelp = show; repaint(); }
     void mouseDown (const juce::MouseEvent&) override;
     void mouseMove (const juce::MouseEvent&) override;
-    static constexpr int numRobots = 11, numThemes = 4;
+    static constexpr int numRobots = 11, numThemes = 10;
     void resized() override;
 
 private:
@@ -94,6 +95,8 @@ private:
     void drawBackground (juce::Graphics&);
     void drawTitle (juce::Graphics&);
     void drawVowelChart (juce::Graphics&, juce::Rectangle<float>);
+    void drawNoiseCloud (juce::Graphics&, juce::Point<float> centre); // hiss around the dot
+    static juce::Colour f3Colour (float f3); // dot and trail colour from F3
     void drawLinePhonemes (juce::Graphics&, juce::Rectangle<float>, int posIdx);
     void drawSpectrum (juce::Graphics&, juce::Rectangle<float>);
     void drawWaveform (juce::Graphics&, juce::Rectangle<float>);
@@ -121,7 +124,7 @@ private:
     std::vector<std::unique_ptr<Knob>> knobs;
 
     // visual state
-    struct TrailPt { float f1, f2, v; };
+    struct TrailPt { float f1, f2, f3, v; };
     std::deque<TrailPt> trail;
     std::deque<juce::String> ticker;
     int lastRestCount = 0, blinkFrames = 0, pendingBlinks = 0; // robot blinks once per rest

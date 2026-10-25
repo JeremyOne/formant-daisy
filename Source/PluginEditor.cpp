@@ -35,8 +35,32 @@ void Palette::applyTheme (int id)
         { 0xff12051f, 0xff1b0a2c, 0xffb5179e, 0xff4a1050, 0xff2de2e6, 0xfff7f0ff, 0xffff6ad5, 0xff2de2e6, 0xff3a2a7a,
           0xfffdd23e, 0xffff9e64, 0xff4a2a6a, 0xff3a2a7a, 0xff1f1440, 0xff6a4ac0, 0xffc77dff, 0xffff6ad5, 0xffffd1f4,
           0xff1f0f30, 0xff4a2a8a, 0xff12051f, 0xffffffff },
+        // Hazy Vaporwave: 4C265F F20775 0678BF 07598C 079DD9
+        { 0xff170b1f, 0xff21102d, 0xff0678bf, 0xff0a2f4a, 0xff079dd9, 0xfff3e6f5, 0xfff20775, 0xff079dd9, 0xff07598c,
+          0xff9b6fc0, 0xffff7fb8, 0xff6a4a85, 0xff4c265f, 0xff2b1538, 0xff6e3f8a, 0xff5a7ec9, 0xfff6e7ff, 0xffffd1ea,
+          0xff1a0d24, 0xff07598c, 0xff170b1f, 0xffffffff },
+        // Neutral Palette 2: 548D95 76C1C3 AE7F21 F0AE44 789342 B4DB6F
+        { 0xff111a1b, 0xff172426, 0xff548d95, 0xff2a474b, 0xff76c1c3, 0xffeef3e0, 0xfff0ae44, 0xff76c1c3, 0xff3d6a70,
+          0xffb4db6f, 0xffcf9a35, 0xff55706f, 0xff789342, 0xff45552a, 0xff9bb35e, 0xff5f9799, 0xfff3f0d0, 0xffffd27a,
+          0xff172426, 0xff548d95, 0xff111a1b, 0xffffffff },
+        // Happy Feet: ED1F2F 0DC8DB 52D932 FFC729 FF8008
+        { 0xff101418, 0xff171c22, 0xff0a8f9e, 0xff0b4a52, 0xff0dc8db, 0xfffff4d6, 0xffff8008, 0xff0dc8db, 0xff0a6b78,
+          0xff52d932, 0xffff5a66, 0xff4d5966, 0xffed1f2f, 0xff8a1019, 0xffff5a66, 0xff5ac8d5, 0xffffc729, 0xffffe08a,
+          0xff1a1f26, 0xff2f8a1c, 0xff101418, 0xffffffff },
+        // Tam & Zpet: 414142 DDB826 D7D7D7 A4AF84 DDDCBE
+        { 0xff1c1c1d, 0xff262627, 0xff8a9370, 0xff4a4f3c, 0xffdddcbe, 0xffdddcbe, 0xffddb826, 0xffa4af84, 0xff55594a,
+          0xffd7d7d7, 0xffe6cf6a, 0xff5e5e5f, 0xff5a5a5b, 0xff2e2e2f, 0xff7a7a7b, 0xff8a8a8b, 0xffd7d7d7, 0xffdddcbe,
+          0xff1c1c1d, 0xff4a4f3c, 0xff1c1c1d, 0xffffffff },
+        // A House of Bees: D6AA58 A9CDD4 E1EBF0 FFFFFF 477A91
+        { 0xff0f1a20, 0xff16252d, 0xff477a91, 0xff223c48, 0xffa9cdd4, 0xffe1ebf0, 0xfff0c470, 0xff6fb0cc, 0xff2f5566,
+          0xffffffff, 0xffd6aa58, 0xff4f6a77, 0xffd6aa58, 0xff8c6a2c, 0xffeac584, 0xff7fa3ab, 0xffe1ebf0, 0xffffffff,
+          0xff16252d, 0xff477a91, 0xff0f1a20, 0xffffffff },
+        // Sports Day: 913F4E CEEAE7 6287A2 FEFFF2 170901
+        { 0xff170901, 0xff22100a, 0xff6287a2, 0xff2c3d4a, 0xffceeae7, 0xfffefff2, 0xffc85a6c, 0xff8fd6cf, 0xff3e5568,
+          0xff8fb0c8, 0xffd9707f, 0xff5a4440, 0xff913f4e, 0xff4f1f29, 0xffb9606f, 0xff6287a2, 0xfffefff2, 0xfffefff2,
+          0xff1f0e08, 0xff3e5568, 0xff170901, 0xffffffff },
     };
-    const T& t = themes[jlimit (0, 3, id)];
+    const T& t = themes[jlimit (0, (int) (sizeof (themes) / sizeof (themes[0])) - 1, id)];
     bg = Colour (t.bg); panel = Colour (t.panel); teal = Colour (t.teal); tealDim = Colour (t.tealDim);
     tealBright = Colour (t.tealBright); cream = Colour (t.cream); orange = Colour (t.orange); blue = Colour (t.blue);
     blueDim = Colour (t.blueDim); lavender = Colour (t.lavender); pink = Colour (t.pink); dim = Colour (t.dim);
@@ -83,7 +107,9 @@ void PixelButton::paint (Graphics& g)
     if (subtle && ! hover && ! down)
     {
         const String t = getText ? getText() : String();
-        PixelFont::drawCentred (g, t, getLocalBounds().toFloat(), 2.0f, Palette::dim.brighter (0.2f));
+        float ts = 2.0f;
+        while (ts > 1.0f && PixelFont::width (t, ts) > (float) getWidth() - 4.0f) ts -= 0.5f;
+        PixelFont::drawCentred (g, t, getLocalBounds().toFloat(), ts, Palette::dim.brighter (0.2f));
         return;
     }
     auto r = getLocalBounds().toFloat();
@@ -210,7 +236,7 @@ FormantDaisyEditor::FormantDaisyEditor (FormantDaisyProcessor& p)
     viewBtn.subtle = true;
     addAndMakeVisible (viewBtn);
 
-    static const char* themeNames[] = { "DAISY", "AMBER", "POCKET", "SYNTH" };
+    static const char* themeNames[] = { "DAISY", "AMBER", "POCKET", "SYNTH", "HAZY", "NEUTRAL", "HAPPY", "TAM", "BEES", "SPORTS" };
     themeBtn.getText = [this] { return String ("COLOR: ") + themeNames[jlimit (0, numThemes - 1, themeId)]; };
     themeBtn.onClick = [this] { setTheme ((themeId + 1) % numThemes); };
     themeBtn.subtle = true;
@@ -322,8 +348,8 @@ void FormantDaisyEditor::resized()
         robotScale = 6.0f;
         robotPos = { 26, 604 };
         viewBtn.setBounds (kCompactW - 64, kCompactH - 34, 52, 24);
-        themeBtn.setBounds (kCompactW - 64 - 6 - 70, kCompactH - 34, 70, 24);
-        themeBtn.getText = [this] { static const char* n[] = { "DAISY", "AMBER", "POCKET", "SYNTH" };
+        themeBtn.setBounds (kCompactW - 64 - 4 - 92, kCompactH - 34, 92, 24);
+        themeBtn.getText = [this] { static const char* n[] = { "DAISY", "AMBER", "POCKET", "SYNTH", "HAZY", "NEUTRAL", "HAPPY", "TAM", "BEES", "SPORTS" };
                                     return String (n[jlimit (0, numThemes - 1, themeId)]); };
         return;
     }
@@ -336,7 +362,7 @@ void FormantDaisyEditor::resized()
     robotPos = { 34, 416 };
     viewBtn.setBounds (568, kHeight - 30, 56, 24);
     themeBtn.setBounds (630, kHeight - 30, 170, 24);
-    themeBtn.getText = [this] { static const char* n[] = { "DAISY", "AMBER", "POCKET", "SYNTH" };
+    themeBtn.getText = [this] { static const char* n[] = { "DAISY", "AMBER", "POCKET", "SYNTH", "HAZY", "NEUTRAL", "HAPPY", "TAM", "BEES", "SPORTS" };
                                 return String ("COLOR: ") + n[jlimit (0, numThemes - 1, themeId)]; };
 
     const int x = 568, w = 388;
@@ -397,7 +423,7 @@ void FormantDaisyEditor::timerCallback()
     const float v = s.vizVoicing.load();
     // divide out the Formant knob so a smaller/larger voice still lines up with the vowel map
     const float shift = jmax (0.1f, proc.apvts.getRawParameterValue ("formant")->load());
-    trail.push_back ({ s.vizF1.load() / shift, s.vizF2.load() / shift, v });
+    trail.push_back ({ s.vizF1.load() / shift, s.vizF2.load() / shift, s.vizF3.load() / shift, v });
     while (trail.size() > 75) trail.pop_front();
 
     // robot blinks once per rest
@@ -688,6 +714,56 @@ void FormantDaisyEditor::drawLinePhonemes (Graphics& g, Rectangle<float> area, i
     }
 }
 
+// F3 colour for the compact view: low F3 (R, ER) = pink, normal = warm glow, high = blue
+Colour FormantDaisyEditor::f3Colour (float f3)
+{
+    const float t = jlimit (0.0f, 1.0f, (f3 - 1400.0f) / (3100.0f - 1400.0f));
+    return t < 0.55f ? Palette::pink.interpolatedWith (Palette::glow, t / 0.55f)
+                     : Palette::glow.interpolatedWith (Palette::blue, (t - 0.55f) / 0.45f);
+}
+
+// Noise static: consonant hiss drawn as a cloud of sparkles around the moving dot.
+// Size = how spread out the noise is (S tight, F and TH wide), density = loudness,
+// colour = noise pitch (high hiss whiter, low hiss pinker). H is a faint lavender haze.
+void FormantDaisyEditor::drawNoiseCloud (Graphics& g, Point<float> centre)
+{
+    auto& s = proc.getSinger();
+    const float fric = s.vizFric.load(), asp = s.vizAsp.load();
+    if (fric < 0.03f && asp < 0.03f) return;
+    Random r ((int64) frame * 7919);
+    auto spray = [&] (float radius, float level, Colour c)
+    {
+        const int count = (int) (level * 60.0f);
+        for (int i = 0; i < count; ++i)
+        {
+            // roughly normal spread around the dot
+            const float gx = (r.nextFloat() + r.nextFloat() + r.nextFloat() - 1.5f) / 1.5f;
+            const float gy = (r.nextFloat() + r.nextFloat() + r.nextFloat() - 1.5f) / 1.5f;
+            const float sz = r.nextFloat() < 0.25f ? 3.0f : 2.0f;
+            g.setColour (c.withAlpha (jlimit (0.2f, 1.0f, level * (0.6f + 0.4f * r.nextFloat()))));
+            g.fillRect (std::round (centre.x + gx * radius), std::round (centre.y + gy * radius), sz, sz);
+        }
+    };
+    if (asp > 0.03f)
+        spray (22.0f, asp * 0.7f, Palette::lavender);
+    if (fric > 0.03f)
+    {
+        const float hz = s.vizFricHz.load();
+        const float t = jlimit (0.0f, 1.0f, std::log (hz / 1500.0f) / std::log (7000.0f / 1500.0f));
+        const float radius = 8.0f + 12.0f * s.vizFricSpread.load();
+        spray (radius, fric, Palette::pink.interpolatedWith (Palette::white, t * 0.7f));
+        // name the hiss while it sounds
+        const int ph = s.vizPhoneme.load();
+        const auto kind = fd::phoneme (ph).kind;
+        const bool noisy = kind != fd::Kind::Silence && kind != fd::Kind::Vowel && kind != fd::Kind::Diphthong
+                           && kind != fd::Kind::Nasal && kind != fd::Kind::Liquid && kind != fd::Kind::Glide;
+        const String name = String (fd::phoneme (ph).name).toUpperCase();
+        if (noisy && name.isNotEmpty())
+            PixelFont::draw (g, name, std::round (centre.x - PixelFont::width (name, 2.0f) * 0.5f),
+                             std::round (centre.y - radius - 22), 2.0f, Palette::white);
+    }
+}
+
 void FormantDaisyEditor::drawVowelChart (Graphics& g, Rectangle<float> a)
 {
     g.setColour (Palette::bg.withAlpha (0.85f));
@@ -737,19 +813,7 @@ void FormantDaisyEditor::drawVowelChart (Graphics& g, Rectangle<float> a)
         PixelFont::draw (g, c.label, std::round (p.x + lx), std::round (p.y + c.ly), 1.0f, Palette::pink.withAlpha (0.8f));
     }
 
-    // diphthongs: faint dotted glide to their end target, hollow marker at the start
-    for (auto& m : diph)
-    {
-        const auto& d = fd::phoneme (fd::findPhoneme (m.ph));
-        const auto p0 = P (m.ph), p1 = P (d.offglide);
-        g.setColour (Palette::teal.withAlpha (0.28f));
-        const int steps = jmax (1, (int) (p0.getDistanceFrom (p1) / 6.0f));
-        for (int i = 1; i < steps; ++i)
-        {
-            const auto q = p0 + (p1 - p0) * ((float) i / (float) steps);
-            g.fillRect (std::round (q.x) - 1, std::round (q.y) - 1, 2.0f, 2.0f);
-        }
-    }
+    // diphthongs: hollow marker at the start
     for (auto& m : diph)
     {
         const auto p = P (m.ph);
@@ -773,7 +837,8 @@ void FormantDaisyEditor::drawVowelChart (Graphics& g, Rectangle<float> a)
         const auto& p1 = trail[(size_t) i];
         if (p0.v < 0.05f || p1.v < 0.05f) continue;
         const float age = (float) i / (float) n;
-        g.setColour (Palette::orange.withAlpha (0.15f + 0.85f * age * age));
+        const Colour tc = f3Colour (p1.f3);
+        g.setColour (tc.withAlpha (0.15f + 0.85f * age * age));
         pixelLine (g, chartPoint (p0.f1, p0.f2, a), chartPoint (p1.f1, p1.f2, a), kPx);
     }
 
@@ -789,20 +854,14 @@ void FormantDaisyEditor::drawVowelChart (Graphics& g, Rectangle<float> a)
         for (int ring = 4; ring >= 1; --ring)
         {
             const float r = (float) ring * kPx * 1.6f * pulse;
-            g.setColour (Palette::glow.withAlpha (0.12f * (5 - ring) * jmin (1.0f, v * 1.5f)));
+            const Colour glowC = f3Colour (s.vizF3.load() / shift);
+            g.setColour (glowC.withAlpha (0.16f * (5 - ring) * jmin (1.0f, v * 1.5f)));
             g.fillRect (cx - r, cy - r, r * 2 + kPx, r * 2 + kPx);
         }
         g.setColour (Palette::white.withAlpha (jmin (1.0f, v * 1.5f)));
         g.fillRect (cx - kPx, cy - kPx, kPx * 3, kPx * 3);
     }
-    else if (s.vizNoise.load() > 0.05f)
-    {
-        // unvoiced: hiss sparkles
-        Random r ((int64) frame);
-        g.setColour (Palette::pink.withAlpha (0.7f));
-        for (int i = 0; i < 6; ++i)
-            g.fillRect (pt.x + r.nextFloat() * 24 - 12, pt.y + r.nextFloat() * 24 - 12, 2.0f, 2.0f);
-    }
+    drawNoiseCloud (g, pt);
 
     // bar / beat indicator (top right): one box per beat, the current one lit.
     // While a line break waits for the next bar it shows WAIT.
@@ -836,7 +895,9 @@ void FormantDaisyEditor::drawVowelChart (Graphics& g, Rectangle<float> a)
     }
 
     // readout
-    const String rd = "F1 " + String (roundToInt (s.vizF1.load())) + "  F2 " + String (roundToInt (s.vizF2.load()));
+
+    const String rd = "F1 " + String (roundToInt (s.vizF1.load())) + "  F2 " + String (roundToInt (s.vizF2.load()))
+                      + "  F3 " + String (roundToInt (s.vizF3.load()));
     PixelFont::draw (g, rd, a.getRight() - PixelFont::width (rd, 1.0f) - 8, a.getBottom() - 12, 1.0f, Palette::teal);
 }
 
@@ -901,21 +962,17 @@ void FormantDaisyEditor::drawSpectrum (Graphics& g, Rectangle<float> a)
         }
     }
 
-    // floating formant labels above their peaks
-    auto label = [&] (const char* txt, float hz, Colour c) {
-        if (hz > maxHz || s.vizVoicing.load() < 0.05f) return;
-        const float x = inner.getX() + hz / maxHz * inner.getWidth();
-        PixelFont::draw (g, txt, jlimit (a.getX() + 4, a.getRight() - 30, x - 11), a.getY() + 5, 2.0f, c);
-    };
-    label ("F1", f1, Palette::orange);
-    label ("F2", f2, Palette::blue);
 
     // legend
     const String sq = String::charToString ((juce_wchar) 3);
-    PixelFont::draw (g, sq, a.getRight() - 64, a.getY() + 6, 1.0f, Palette::orange);
-    PixelFont::draw (g, "F1", a.getRight() - 56, a.getY() + 6, 1.0f, Palette::cream);
-    PixelFont::draw (g, sq, a.getRight() - 36, a.getY() + 6, 1.0f, Palette::blue);
-    PixelFont::draw (g, "F2", a.getRight() - 28, a.getY() + 6, 1.0f, Palette::cream);
+    const std::pair<const char*, Colour> keys[] = { { "F1", Palette::orange }, { "F2", Palette::blue }, { "F3", Palette::lavender } };
+    float kx = a.getRight() - 92;
+    for (auto& [txt, col] : keys)
+    {
+        PixelFont::draw (g, sq, kx, a.getY() + 6, 1.0f, col);
+        PixelFont::draw (g, txt, kx + 8, a.getY() + 6, 1.0f, Palette::cream);
+        kx += 28;
+    }
 }
 
 void FormantDaisyEditor::drawWaveform (Graphics& g, Rectangle<float> a)

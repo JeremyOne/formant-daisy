@@ -4,7 +4,7 @@ A singing robot instrument plugin (VST3 / Standalone). Type lyrics, play MIDI, a
 
 ![Formant Daisy, full view](docs/images/full-view.png)
 
-**Version:** 0.11.0. See [CHANGELOG.md](CHANGELOG.md).
+**Version:** 0.13.0. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Contents
 
@@ -44,9 +44,9 @@ Rescan plugins in your DAW. Formant Daisy shows up as an instrument from **Proje
 |---|---|
 | Top line (`>> DEY-ZIY ...`) | The phonemes of the current lyric line. Sung syllables are orange, the current one is cream, and upcoming ones are dim. |
 | Big word | The word being sung, lit up syllable by syllable, with the next few words underneath and a `NOW SINGING x/y` counter. |
-| Formant chart | Every phoneme placed by its first two formants (F1 down, F2 left). Vowels are teal, gliding vowels have a hollow marker, and consonants are pink. The glowing dot and orange trail show the voice moving between them. |
+| Formant chart | Every phoneme placed by its first two formants (F1 down, F2 left). Vowels are teal, gliding vowels have a hollow marker, and consonants are pink. The glowing dot and its trail show the voice moving between them, and their color shows the third formant (F3): pink when it's low (R, ER), warm for normal vowels, blue when it's high (EE). Consonant hiss appears as static around the dot: tight for S, wide for F and TH, whiter for high hiss and pinker for low hiss. |
 | BAR and beat boxes | Top-right of the chart. The current bar and beat from your DAW, with `WAIT` while a new line waits for the next bar. |
-| Spectrum | The live frequency spectrum, with the F1 (orange) and F2 (blue) peaks labeled. |
+| Spectrum | The live frequency spectrum. Bars near F1, F2 and F3 are colored to match the key in the corner. |
 | Scope | The output waveform. |
 | Robot | The mouth follows the formants (F2 sets width, F1 sets height), the antenna lights while voiced, and the eyes blink on each rest. Click it to change the robot. |
 
@@ -133,7 +133,7 @@ Click **9:16** for a compact view with just the display and the robot. It's 540Ã
 
 <img src="docs/images/compact-view.png" alt="Compact 9:16 view" width="270">
 
-**COLOR** cycles four color schemes: Daisy, Amber Terminal, Pocket Green and Synthwave.
+**COLOR** cycles ten color schemes: DAISY, AMBER (Amber Terminal), POCKET (Pocket Green), SYNTH (Synthwave), HAZY (Hazy Vaporwave), NEUTRAL (Neutral Palette 2), HAPPY (Happy Feet), TAM (Tam & ZpÄ›t), BEES (A House of Bees) and SPORTS (Sports Day).
 
 ![Color schemes](docs/images/color-schemes.png)
 

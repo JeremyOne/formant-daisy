@@ -69,6 +69,9 @@ public:
     // Visualisation (read from the UI thread)
     std::atomic<float> vizF1 { 500 }, vizF2 { 1500 }, vizF3 { 2500 };
     std::atomic<float> vizVoicing { 0 }, vizNoise { 0 }, vizLevel { 0 };
+    // consonant noise for the display: frication level, aspiration level,
+    // centre frequency of the frication (Hz) and its spread (octaves)
+    std::atomic<float> vizFric { 0 }, vizAsp { 0 }, vizFricHz { 4000 }, vizFricSpread { 1 };
     std::atomic<int> vizSyllable { -1 }, vizPhoneme { 0 };
     std::atomic<int> vizRestCount { 0 };
     std::atomic<bool> vizWaiting { false }; // paused at a line break until the next bar // increments every time a rest is consumed
