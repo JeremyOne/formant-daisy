@@ -1,0 +1,107 @@
+name: Release
+
+# Builds Windows and Linux when a version tag (vX.Y.Z) is pushed and attaches
+# the zips to a GitHub Release. Can also be run by hand for test builds.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: Windows-x64
+          - os: ubuntu-22.04
+            platform: Linux-x64
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version from CMakeLists.txt
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(sed -n 's/^project(FormantDaisy VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          if [ -z "$VERSION" ]; then echo "Could not read the version from CMakeLists.txt"; exit 1; fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version $VERSION"
+
+      - name: Check the tag matches the version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "v${{ steps.version.outputs.version }}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match CMakeLists.txt version v${{ steps.version.outputs.version }}"
+            exit 1
+          fi
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libasound2-dev libx11-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxext-dev libfreetype-dev libfontconfig1-dev libgl1-mesa-dev
+
+      - name: Configure
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          else
+            cmake -B build -A x64
+          fi
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4 --target FormantDaisy_VST3 FormantDaisy_Standalone
+
+      - name: Package
+        shell: bash
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          NAME=FormantDaisy-$VERSION-${{ matrix.platform }}
+          ART=build/FormantDaisy_artefacts/Release
+          mkdir -p dist
+          (cd "$ART/VST3" && cmake -E tar cf "$GITHUB_WORKSPACE/dist/$NAME-VST3.zip" --format=zip "Formant Daisy.vst3")
+          (cd "$ART/Standalone" && cmake -E tar cf "$GITHUB_WORKSPACE/dist/$NAME-Standalone.zip" --format=zip .)
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FormantDaisy-${{ steps.version.outputs.version }}-${{ matrix.platform }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Release notes from CHANGELOG.md
+        shell: bash
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          awk -v v="## $VERSION" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Formant Daisy $VERSION" > notes.md
+          cat notes.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Formant Daisy ${{ github.ref_name }}
+          body_path: notes.md
+          files: dist/*.zip
