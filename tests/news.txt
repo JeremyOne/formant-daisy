@@ -1,0 +1,34 @@
+So basically, today PHP got two critical bugs that let anyone run code on your server without even logging in, which is bad
+And then the details leaked before the patch was even out, which is worse. 
+It works on WordPress and Media Wiki and Magento and Joomla and Laravel, and Censys says like one point five million servers are running a version with no fix.
+so the NSA was like "take your system off-line,"
+and the FBI was like "take your system off-line,"
+and CISA and the UK and CERT EU were all like "take your system off-line,"
+and then the Prime Minister of Japan, the actual Prime Minister, posted at five fifty five in the morning telling fourty eight million people to take their system off-line.
+So everyone took their system off-line, 
+like the Dutch cybersecurity agency took its own website off-line, 
+and the Dutch parliament went off-line, 
+and the Port of Rotterdam went off-line, 
+and Finland and France and Denmark started pulling government sites, 
+and Wikipedia went down, and Archive dot org went down, 
+and Asana and Good Old Games and Something Awful went down, 
+and the University of Vienna's webmail went down for some reason, 
+and that's just PHP. 
+Because Git Lab also dropped a CVSS ten point oh, which is the highest score they give out, 
+for a bug that's been there since twenty fourteen, 
+so that's every self-hosted Git-Lab for twelve years, 
+and then Lite LLM got hijacked and shipped a credential stealer and a remote access trojan in every single wheel and the Docker images, including latest, and you didn't even have to import it, just installing it was enough, 
+and it's the second time this year, 
+and then Railway paused every deployment on the entire platform because someone got into the environment variables, so now everyone has to rotate every secret they've ever stored there, 
+and TIDB Cloud said someone was walking around inside with stolen credentials for basically a month and an extortion group says they took ten terabytes, 
+and Zeabur got breached for the second time in two months and is just shutting down, like the whole company, 
+and Node.js patched remote code execution and a TLS bypass, 
+and CISA says Plex is being actively exploited, 
+and someone took over three hundred Tor exit relays to steal SSH passwords, 
+and Safe Pay ransomware has hit over six hundred critical infrastructure orgs, 
+and India's biggest bank filed a data loss incident, 
+and Japan has been in an official state of emergency in cyberspace since October ninth, which honestly explains the five fifty five AM post. 
+Oh, and Mudhra, a certificate authority that's issued over sixty million certificates, whose entire job is proving websites are who they say they are, was supposed to be using private keys that are random numbers over a hundred digits long, and one of them was four. Just four. 
+And the others were like sixty six and two hundred thirty seven
+Anyway, it's Wednesday.
+Anyway, it's Wednesday.

@@ -1,10 +1,13 @@
 #include "TextToPhonemes.h"
 #include "Phonemes.h"
+#include "CmuDict.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cctype>
+#include <cstring>
 #include <map>
+#include <optional>
 #include <sstream>
 #include <unordered_map>
 
@@ -169,6 +172,16 @@ static const DictEntry kDict[] = {
     { "eight", "eight", "ey t" },
     { "nine", "nine", "n ay n" },
     { "ten", "ten", "t eh n" },
+    // music words the big dictionary reads another way
+    { "bass", "bass", "b ey s" },
+    { "basses", "bass|es", "b ey | s ih z" },
+    // poetic contractions
+    { "o'er", "o'er", "ow r" },
+    { "e'er", "e'er", "eh r" },
+    { "ne'er", "ne'er", "n eh r" },
+    { "e'en", "e'en", "iy n" },
+    { "'tis", "'tis", "t ih z" },
+    { "'twas", "'twas", "t w ah z" },
 };
 // clang-format on
 
@@ -673,11 +686,324 @@ bool isAcronym (const std::string& token)
     return true;
 }
 
-// Convert one word token (may contain hyphens as syllable hints) into syllables.
-void wordToSyllables (const std::string& token, int wordIndex, std::vector<Syllable>& out, bool spellAcronyms = true)
+//==============================================================================
+// Big dictionary: the CMU Pronouncing Dictionary (see CmuDict.h), unpacked into
+// a hash map the first time a word is looked up.
+struct CmuIndex
 {
+    std::unordered_map<std::string, std::pair<unsigned int, unsigned char>> words; // offset, count
+    std::vector<int> codeToId;
+};
+
+const CmuIndex& cmuIndex()
+{
+    static const CmuIndex idx = [] {
+        CmuIndex x;
+        for (int i = 0; i < kCmuPhoneCount; ++i)
+            x.codeToId.push_back (findPhoneme (kCmuPhones[i]));
+        x.words.reserve (kCmuWordCount);
+        std::string word;
+        unsigned int p = 0;
+        while (p + 2 <= kCmuDataSize)
+        {
+            const unsigned shared = kCmuData[p++], len = kCmuData[p++];
+            word.resize (std::min<size_t> (shared, word.size()));
+            word.append (reinterpret_cast<const char*> (kCmuData + p), len);
+            p += len;
+            const unsigned char count = kCmuData[p++];
+            x.words.emplace (word, std::make_pair (p, count));
+            p += count;
+        }
+        return x;
+    }();
+    return idx;
+}
+
+bool cmuLookup (const std::string& lowerWord, std::vector<int>& out)
+{
+    const auto& idx = cmuIndex();
+    auto it = idx.words.find (lowerWord);
+    if (it == idx.words.end()) return false;
+    out.clear();
+    for (unsigned k = 0; k < it->second.second; ++k)
+    {
+        const unsigned code = kCmuData[it->second.first + k];
+        if (code < idx.codeToId.size() && idx.codeToId[code] >= 0)
+            out.push_back (idx.codeToId[code]);
+    }
+    return ! out.empty();
+}
+
+bool voicelessEnd (const std::vector<int>& p)
+{
+    if (p.empty()) return false;
+    const std::string n = phoneme (p.back()).name;
+    return n == "p" || n == "t" || n == "k" || n == "f" || n == "th";
+}
+bool sibilantEnd (const std::vector<int>& p)
+{
+    if (p.empty()) return false;
+    const std::string n = phoneme (p.back()).name;
+    return n == "s" || n == "z" || n == "sh" || n == "zh" || n == "ch" || n == "jh";
+}
+void append (std::vector<int>& p, const char* phones)
+{
+    for (int id : parsePhoneList (phones)) p.push_back (id);
+}
+
+// Whole-word lookup: hand dictionary, then CMU, then (for words neither knows)
+// a known word plus a common ending ("slumbers", "deathless"), then two known
+// words joined together ("webmail", "ransomware").
+bool lookupWord (const std::string& w, std::vector<int>& out, int depth = 0)
+{
+    if (const DictEntry* e = lookup (w))
+    {
+        std::string flat = e->phones;
+        std::replace (flat.begin(), flat.end(), '|', ' ');
+        out = parsePhoneList (flat);
+        return ! out.empty();
+    }
+    if (cmuLookup (w, out))
+        return true;
+    if (depth >= 2 || w.size() < 4)
+        return false;
+
+    auto ends = [&w] (const char* s) {
+        const size_t n = std::strlen (s);
+        return w.size() > n + 2 && w.compare (w.size() - n, n, s) == 0;
+    };
+    auto stem = [&w] (size_t cut) { return w.substr (0, w.size() - cut); };
+    // try the stem as is, with a silent e put back, and with a doubled consonant removed
+    auto stemVariants = [] (const std::string& s) {
+        std::vector<std::string> v { s, s + "e" };
+        if (s.size() > 2 && s.back() == s[s.size() - 2]) v.push_back (s.substr (0, s.size() - 1));
+        if (! s.empty() && s.back() == 'i') v.push_back (s.substr (0, s.size() - 1) + "y");
+        return v;
+    };
+    std::vector<int> base;
+
+    if (ends ("'s") && lookupWord (stem (2), base, depth + 1))
+    {
+        out = base;
+        append (out, sibilantEnd (base) ? "ih z" : voicelessEnd (base) ? "s" : "z");
+        return true;
+    }
+    if (ends ("ing"))
+        for (auto& s : stemVariants (stem (3)))
+            if (lookupWord (s, base, depth + 1)) { out = base; append (out, "ih ng"); return true; }
+    if (ends ("ed"))
+        for (auto& s : stemVariants (stem (2)))
+            if (lookupWord (s, base, depth + 1))
+            {
+                out = base;
+                const std::string last = phoneme (base.back()).name;
+                append (out, (last == "t" || last == "d") ? "ih d" : voicelessEnd (base) || sibilantEnd (base) ? "t" : "d");
+                return true;
+            }
+    static const std::pair<const char*, const char*> suffixes[] = {
+        { "less", "l ax s" }, { "ness", "n ax s" }, { "ful", "f ax l" }, { "ly", "l iy" },
+        { "ers", "er z" }, { "er", "er" }, { "ment", "m ax n t" }, { "able", "ax b ax l" },
+    };
+    for (auto& [suf, phones] : suffixes)
+        if (ends (suf))
+            for (auto& s : stemVariants (stem (std::strlen (suf))))
+                if (lookupWord (s, base, depth + 1)) { out = base; append (out, phones); return true; }
+    if (ends ("es") && lookupWord (stem (2), base, depth + 1) && sibilantEnd (base))
+    {
+        out = base;
+        append (out, "ih z");
+        return true;
+    }
+    if (ends ("s") && w[w.size() - 2] != 's' && lookupWord (stem (1), base, depth + 1))
+    {
+        out = base;
+        append (out, sibilantEnd (base) ? "ih z" : voicelessEnd (base) ? "s" : "z");
+        return true;
+    }
+
+    // two known words joined: longest first part wins, both parts 3+ letters
+    if (depth == 0 && w.size() >= 6)
+        for (size_t cut = w.size() - 3; cut >= 3; --cut)
+        {
+            std::vector<int> a, b;
+            if (lookupWord (w.substr (0, cut), a, 2) && lookupWord (w.substr (cut), b, 1))
+            {
+                out = a;
+                out.insert (out.end(), b.begin(), b.end());
+                return true;
+            }
+        }
+    return false;
+}
+
+// Split a word's letters into n display chunks, one per sung syllable. Uses
+// vowel groups when they match the syllable count, otherwise even slices.
+std::vector<std::pair<size_t, size_t>> vowelGroups (const std::string& word)
+{
+    auto isV = [&word] (size_t i) {
+        return i < word.size() && std::strchr ("aeiou", std::tolower ((unsigned char) word[i])) != nullptr && word[i] != 0;
+    };
+    auto vowelAt = [&] (size_t i) {
+        const char c = (char) std::tolower ((unsigned char) word[i]);
+        if (c == 'y') // a consonant at the start or between vowels (yes, swaying)
+            return i > 0 && ! (isV (i - 1) && isV (i + 1));
+        return isV (i);
+    };
+    std::vector<std::pair<size_t, size_t>> groups; // [start, end)
+    for (size_t i = 0; i < word.size();)
+    {
+        if (! vowelAt (i)) { ++i; continue; }
+        size_t j = i;
+        while (j < word.size() && vowelAt (j)) ++j;
+        groups.push_back ({ i, j });
+        i = j;
+    }
+    // a silent final e ("make", "lone", "fire")
+    if (groups.size() > 1 && groups.back().first == word.size() - 1 && std::tolower ((unsigned char) word.back()) == 'e')
+        groups.pop_back();
+    return groups;
+}
+
+std::vector<std::string> letterSplit (const std::string& word, size_t n)
+{
+    if (n >= 2 && word.size() > 4 && toLower (word.substr (word.size() - 3)) == "ing")
+    {
+        auto v = letterSplit (word.substr (0, word.size() - 3), n - 1);
+        v.push_back (word.substr (word.size() - 3));
+        return v;
+    }
+    if (n <= 1 || word.size() < n) 
+    {
+        std::vector<std::string> v (std::max<size_t> (n, 1));
+        v[0] = word;
+        return v;
+    }
+    auto groups = vowelGroups (word);
+    if (groups.size() == n + 1 && groups.back().second == word.size()
+        && std::tolower ((unsigned char) word.back()) == 'e' && groups.back().second - groups.back().first == 1)
+        groups.pop_back();
+    // fewer vowel groups than syllables ("media", "vienna"): split the longest groups
+    while (groups.size() < n)
+    {
+        auto it = std::max_element (groups.begin(), groups.end(), [] (auto& a, auto& b) {
+            return a.second - a.first < b.second - b.first;
+        });
+        if (it == groups.end() || it->second - it->first < 2) break;
+        const auto g = *it;
+        *it = { g.first, g.first + 1 };
+        groups.insert (it + 1, { g.first + 1, g.second });
+    }
+
+    std::vector<size_t> cuts;
+    if (groups.size() == n)
+    {
+        for (size_t k = 1; k < n; ++k)
+        {
+            const size_t a = groups[k - 1].second, b = groups[k].first; // consonants in [a, b)
+            size_t cut = b - a <= 1 ? a : a + 1;
+            if (b - a >= 2) // keep th, sh, ch, ph, wh, gh, ck, ng together
+            {
+                const std::string pair = toLower (word.substr (a, 2));
+                for (const char* d : { "th", "sh", "ch", "ph", "wh", "gh", "ck", "ng" })
+                    if (pair == d) cut = b - a == 2 ? a : a + 2;
+            }
+            cuts.push_back (cut);
+        }
+    }
+    else
+        for (size_t k = 1; k < n; ++k)
+            cuts.push_back ((word.size() * k + n / 2) / n);
+
+    std::vector<std::string> out;
+    size_t s = 0;
+    for (size_t c : cuts) { out.push_back (word.substr (s, c - s)); s = c; }
+    out.push_back (word.substr (s));
+    return out;
+}
+
+// Syllabify a flat phoneme list and append it as one word.
+void emitWord (const std::vector<int>& idsIn, const std::string& display, int wordIndex, std::vector<Syllable>& out)
+{
+    // "our", "hour", "fire": the dictionary says ow-er, but it's sung as one note
+    std::vector<int> ids = idsIn;
+    const size_t spelled = vowelGroups (display).size();
+    size_t sung = (size_t) std::count_if (ids.begin(), ids.end(), [] (int id) { return isVowel (id); });
+    const int er = ph ("er"), r = ph ("r");
+    for (size_t i = 1; i < ids.size() && sung > std::max<size_t> (spelled, 1); ++i)
+    {
+        const std::string prev = phoneme (ids[i - 1]).name;
+        if (ids[i] == er && (prev == "aw" || prev == "ay" || prev == "oy"))
+        {
+            ids[i] = r;
+            --sung;
+        }
+    }
+    std::vector<Ph> phs;
+    for (int id : ids) phs.push_back ({ id, 0 });
+    auto raws = autoSyllabify (phs);
+    auto labels = letterSplit (display, raws.size());
+    for (size_t k = 0; k < raws.size(); ++k)
+    {
+        Syllable s = toSyllable (raws[k].phs);
+        s.label = k < labels.size() ? labels[k] : std::string();
+        s.word = wordIndex;
+        out.push_back (s);
+    }
+}
+
+void bracketToSyllables (const std::string& inside, int wordIndex, std::vector<Syllable>& out);
+bool isPhonemeText (const std::string& s);
+
+// Convert one word token (may contain hyphens as syllable hints) into syllables.
+using UserDict = std::unordered_map<std::string, std::string>; // word -> phonemes or respelling
+
+void wordToSyllables (const std::string& token, int wordIndex, std::vector<Syllable>& out, bool spellAcronyms = true,
+                      const UserDict* user = nullptr)
+{
+    const std::string lower = toLower (token);
+    std::string joined;
+    for (char c : lower) if (c != '-') joined += c;
+
+    // the singer's own definitions ("ceiling = s iy | l ih ng" or "taxicab = tack-see-cab")
+    if (user != nullptr)
+        if (auto it = user->find (joined); it != user->end())
+        {
+            std::string rhs = it->second;
+            std::vector<Syllable> tmp;
+            const bool bracketed = ! rhs.empty() && rhs.front() == '[';
+            if (bracketed)
+            {
+                rhs.erase (0, 1);
+                if (! rhs.empty() && rhs.back() == ']') rhs.pop_back();
+            }
+            if (bracketed || isPhonemeText (rhs))
+                bracketToSyllables (rhs, wordIndex, tmp);
+            else
+            {
+                std::istringstream is (rhs);
+                std::string w;
+                while (is >> w)
+                    wordToSyllables (w, wordIndex, tmp, false, nullptr);
+            }
+            auto labels = letterSplit (joined, tmp.size());
+            for (size_t k = 0; k < tmp.size(); ++k)
+            {
+                tmp[k].label = k < labels.size() ? labels[k] : std::string();
+                tmp[k].word = wordIndex;
+                out.push_back (tmp[k]);
+            }
+            if (! tmp.empty()) return;
+        }
+
     if (spellAcronyms && isAcronym (token))
     {
+        // acronyms the dictionary says as words (NASA, CERT, PHP) use that
+        std::vector<int> ids;
+        if (token.size() >= 3 && cmuLookup (joined, ids))
+        {
+            emitWord (ids, token, wordIndex, out);
+            return;
+        }
         for (char c : token)
         {
             auto parts = splitOn (letterName (c), '|');
@@ -694,10 +1020,6 @@ void wordToSyllables (const std::string& token, int wordIndex, std::vector<Sylla
         return;
     }
 
-    const std::string lower = toLower (token);
-    std::string joined;
-    for (char c : lower) if (c != '-') joined += c;
-
     if (const DictEntry* e = lookup (joined); e != nullptr && lower.find ('-') == std::string::npos)
     {
         auto phParts = splitOn (e->phones, '|');
@@ -713,6 +1035,16 @@ void wordToSyllables (const std::string& token, int wordIndex, std::vector<Sylla
             out.push_back (s);
         }
         return;
+    }
+
+    if (lower.find ('-') == std::string::npos)
+    {
+        std::vector<int> ids;
+        if (lookupWord (joined, ids))
+        {
+            emitWord (ids, joined, wordIndex, out);
+            return;
+        }
     }
 
     // letters only for the rules (apostrophes kept: some rules use them)
@@ -746,6 +1078,40 @@ void wordToSyllables (const std::string& token, int wordIndex, std::vector<Sylla
             return;
         }
     }
+    if (! hintBreaks.empty())
+    {
+        std::vector<std::string> parts;
+        for (auto& part : splitOn (lower, '-'))
+            if (! part.empty()) parts.push_back (part);
+
+        // a real word with syllable hints ("tax-i-cab"): dictionary sounds, the user's splits
+        std::vector<int> ids;
+        if (lookupWord (joined, ids))
+        {
+            std::vector<Ph> p;
+            for (int id : ids) p.push_back ({ id, 0 });
+            auto raws = autoSyllabify (p);
+            if (raws.size() == parts.size())
+            {
+                for (size_t k = 0; k < raws.size(); ++k)
+                {
+                    Syllable s = toSyllable (raws[k].phs);
+                    s.label = parts[k];
+                    s.word = wordIndex;
+                    out.push_back (s);
+                }
+                return;
+            }
+        }
+        // a compound ("sea-breakers", "off-line", "self-hosted"): each part on its own
+        if (parts.size() > 1 && std::all_of (parts.begin(), parts.end(), [] (const std::string& x) { return x.size() >= 3; }))
+        {
+            for (auto& part : parts)
+                wordToSyllables (part, wordIndex, out, false, user);
+            return;
+        }
+    }
+
     std::vector<Ph> phs = applyRules (toUpper (letters));
     if (phs.empty())
         return;
@@ -875,6 +1241,46 @@ void bracketToSyllables (const std::string& inside, int wordIndex, std::vector<S
         }
     }
 }
+
+// "s iy | l ih ng": every piece is a phoneme name
+bool isPhonemeText (const std::string& s)
+{
+    std::string t = s;
+    for (auto& c : t) if (c == '|' || c == '-' || c == '/') c = ' ';
+    std::istringstream is (t);
+    std::string tok;
+    int n = 0;
+    while (is >> tok)
+    {
+        if (findPhoneme (toLower (tok)) < 0) return false;
+        ++n;
+    }
+    return n > 0;
+}
+
+// "word = sounds" (one word, then '=', then phonemes, [phonemes] or a respelling).
+std::optional<std::pair<std::string, std::string>> parseDefinition (const std::string& line)
+{
+    const size_t eq = line.find ('=');
+    if (eq == std::string::npos) return std::nullopt;
+    auto trim = [] (std::string x) {
+        const char* ws = " \t\r";
+        x.erase (0, x.find_first_not_of (ws));
+        const size_t e = x.find_last_not_of (ws);
+        x.erase (e == std::string::npos ? 0 : e + 1);
+        return x;
+    };
+    std::string word = trim (line.substr (0, eq)), rhs = trim (line.substr (eq + 1));
+    if (word.empty() || rhs.empty()) return std::nullopt;
+    std::string key;
+    for (char c : word)
+    {
+        if (std::isalpha ((unsigned char) c) || c == '\'') key += (char) std::tolower ((unsigned char) c);
+        else if (c != '-') return std::nullopt; // must be a single word
+    }
+    if (key.empty()) return std::nullopt;
+    return std::make_pair (key, rhs);
+}
 } // namespace
 
 //==============================================================================
@@ -946,9 +1352,30 @@ std::string phonemesToString (const std::vector<int>& phs)
     return s;
 }
 
-Lyrics parseLyrics (const std::string& text, bool spellAcronyms)
+Lyrics parseLyrics (const std::string& rawText, bool spellAcronyms)
 {
     Lyrics L;
+    // Lines like "ceiling = s iy | l ih ng" define how a word is said. They
+    // apply to the whole lyric and are not sung.
+    UserDict user;
+    std::string text;
+    {
+        std::istringstream is (rawText);
+        std::string line;
+        bool first = true;
+        while (std::getline (is, line))
+        {
+            if (auto def = parseDefinition (line))
+            {
+                user[def->first] = def->second;
+                continue;
+            }
+            if (! first) text += '\n';
+            text += line;
+            first = false;
+        }
+        if (! rawText.empty() && rawText.back() == '\n' && ! text.empty()) text += '\n';
+    }
     // Every punctuation mark is its own rest (".... " = four rests). A line
     // break only lengthens a rest in Tempo mode and never takes a note.
     auto addRest = [&L] (int steps, bool punctuation) {
@@ -1015,18 +1442,18 @@ Lyrics parseLyrics (const std::string& text, bool spellAcronyms)
                 {
                     if (std::isdigit ((unsigned char) ch))
                     {
-                        if (! letters.empty()) { L.words.push_back (letters); wordToSyllables (letters, (int) L.words.size() - 1, L.syllables, spellAcronyms); letters.clear(); }
+                        if (! letters.empty()) { L.words.push_back (letters); wordToSyllables (letters, (int) L.words.size() - 1, L.syllables, spellAcronyms, &user); letters.clear(); }
                         L.words.push_back (digitWord (ch));
                         wordToSyllables (digitWord (ch), (int) L.words.size() - 1, L.syllables);
                     }
                     else letters += ch;
                 }
-                if (! letters.empty()) { L.words.push_back (letters); wordToSyllables (letters, (int) L.words.size() - 1, L.syllables, spellAcronyms); }
+                if (! letters.empty()) { L.words.push_back (letters); wordToSyllables (letters, (int) L.words.size() - 1, L.syllables, spellAcronyms, &user); }
             }
             else if (! tok.empty())
             {
                 L.words.push_back (tok);
-                wordToSyllables (tok, (int) L.words.size() - 1, L.syllables, spellAcronyms);
+                wordToSyllables (tok, (int) L.words.size() - 1, L.syllables, spellAcronyms, &user);
             }
             i = j;
             continue;

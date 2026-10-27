@@ -2,6 +2,17 @@
 
 The minor version goes up with every change. Tag `vX.Y.Z` to publish a release.
 
+## 0.14.0
+
+- Much better pronunciation: the CMU Pronouncing Dictionary (about 125,000 words) is now built in.
+- Words the dictionary doesn't have are tried as a known word plus an ending (slumbers, deathless, scorning) or two known words joined (webmail, ransomware) before falling back to letter-to-sound rules.
+- Hyphenated compounds (sea-breakers, off-line, self-hosted) are read part by part.
+- All-caps words the dictionary says as words (NASA, CERT) are no longer spelled out.
+- New: define how a word is said with a line like `ceiling = s iy | l ih ng` (or a respelling, `taxicab = tacksee cab`). Definition lines apply to the whole lyric, aren't sung, and are saved with the project.
+- "bass" is said like "base", and poetic contractions (o'er, ne'er, e'en) are known.
+- Syllables shown on screen split more naturally (fa-shion, ly-ing, me-di-a).
+- Release zips include the dictionary's license.
+
 ## 0.13.0
 
 - Six new color schemes: HAZY, NEUTRAL, HAPPY, TAM, BEES and SPORTS (ten in total).

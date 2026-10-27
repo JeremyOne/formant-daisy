@@ -908,23 +908,24 @@ void FormantDaisyEditor::drawHelp (Graphics& g, Rectangle<float> a)
     drawFrame (g, a, Palette::orange, true);
     const char* lines[] = {
         "HOW TO SING",
-        "NOTES MODE: EACH MIDI NOTE SINGS",
-        "  THE NEXT SYLLABLE. HOLD = HOLD VOWEL",
-        "TEMPO MODE: HOLD A NOTE AND IT SPEAKS",
-        "  ONE SYLLABLE PER DIVISION",
+        "NOTES: ONE SYLLABLE PER NOTE, HOLD IT",
+        "TEMPO: HOLD A NOTE, ONE SYLLABLE/DIV",
         "DAI-SY        SPLIT SYLLABLES YOURSELF",
         "[D EY Z IY]   TYPE RAW PHONEMES",
+        "CEILING = S IY | L IH NG  ON ITS OWN",
+        "  LINE SETS HOW A WORD IS SAID",
         ", . ! ? = ONE REST NOTE EACH",
         "NEW LINE = WAIT FOR THE NEXT BAR",
         "ABC = SPELL CAPS ACRONYMS (PHP)",
         "LEAD = CONSONANTS START EARLY SO",
         "  VOWELS LAND ON THE BEAT",
     };
-    float y = a.getY() + 14;
+    const float step = jmin (18.0f, (a.getHeight() - 22.0f) / (float) std::size (lines));
+    float y = a.getY() + 12;
     for (auto* l : lines)
     {
         PixelFont::draw (g, l, a.getX() + 16, y, 2.0f, String (l) == "HOW TO SING" ? Palette::orange : Palette::cream);
-        y += 18;
+        y += step;
     }
 }
 

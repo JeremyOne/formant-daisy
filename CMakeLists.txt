@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 # Version: bump the minor number for every change; tag vX.Y.Z to publish a release.
-project(FormantDaisy VERSION 0.13.0 LANGUAGES C CXX)
+project(FormantDaisy VERSION 0.14.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -52,7 +52,8 @@ target_sources(FormantDaisy PRIVATE
     Source/PixelFont.cpp
     Source/engine/Phonemes.cpp
     Source/engine/TextToPhonemes.cpp
-    Source/engine/FormantSinger.cpp)
+    Source/engine/FormantSinger.cpp
+    Source/engine/CmuDict.cpp)
 
 target_include_directories(FormantDaisy PRIVATE Source)
 
@@ -73,7 +74,7 @@ target_link_libraries(FormantDaisy
 
 # Offline test tools (no JUCE needed)
 add_executable(render_daisy tools/render_daisy.cpp
-    Source/engine/Phonemes.cpp Source/engine/TextToPhonemes.cpp Source/engine/FormantSinger.cpp)
+    Source/engine/Phonemes.cpp Source/engine/TextToPhonemes.cpp Source/engine/FormantSinger.cpp Source/engine/CmuDict.cpp)
 target_include_directories(render_daisy PRIVATE Source)
 
 # Dev-only: headless UI screenshot tool (not part of the plugin)
@@ -82,7 +83,7 @@ if(FD_BUILD_DEV_TOOLS)
     juce_add_console_app(ui_snapshot PRODUCT_NAME "ui_snapshot")
     target_sources(ui_snapshot PRIVATE tools/ui_snapshot.cpp
         Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/PixelFont.cpp
-        Source/engine/Phonemes.cpp Source/engine/TextToPhonemes.cpp Source/engine/FormantSinger.cpp)
+        Source/engine/Phonemes.cpp Source/engine/TextToPhonemes.cpp Source/engine/FormantSinger.cpp Source/engine/CmuDict.cpp)
     target_include_directories(ui_snapshot PRIVATE Source)
     target_compile_definitions(ui_snapshot PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
         JucePlugin_Name="Formant Daisy" JucePlugin_VersionString="${PROJECT_VERSION}" JUCE_MODAL_LOOPS_PERMITTED=1)

@@ -1,10 +1,10 @@
 # Formant Daisy
 
-A singing robot instrument plugin (VST3 / Standalone). Type lyrics, play MIDI, and it sings them one syllable per note using formant synthesis, the technique behind the 1961 Bell Labs IBM 7090 "Daisy Bell" demo and DECtalk.
+A singing robot instrument plugin (VST3 / Standalone). Type lyrics, play MIDI, and it sings them one syllable per note using formant synthesis, the technique behind the 1961 Bell Labs IBM 7094 "Daisy Bell" demo and DECtalk.
 
 ![Formant Daisy, full view](docs/images/full-view.png)
 
-**Version:** 0.13.0. See [CHANGELOG.md](CHANGELOG.md).
+**Version:** 0.14.0. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Contents
 
@@ -17,6 +17,7 @@ A singing robot instrument plugin (VST3 / Standalone). Type lyrics, play MIDI, a
 - [Audio input (vocoder style)](#audio-input-vocoder-style)
 - [Compact 9:16 view, colors and robots](#compact-916-view-colors-and-robots)
 - [How the sound is made](#how-the-sound-is-made)
+- [About the technologies](#about-the-technologies)
 - [Building from source](#building-from-source)
 - [Releases](#releases)
 
@@ -60,10 +61,12 @@ Type in the LYRICS box. Changes apply about a quarter second after you stop typi
 
 | You type | What happens |
 |---|---|
-| `daisy daisy` | Normal words, pronounced by a built-in dictionary plus English letter-to-sound rules. |
+| `daisy daisy` | Normal words. They're looked up in the [CMU Pronouncing Dictionary](https://github.com/cmusphinx/cmudict) (about 125,000 words, built in). Words it doesn't have are tried as a known word plus an ending (`slumbers`, `deathless`) or two known words joined (`webmail`). Anything else uses English letter-to-sound rules. |
+| `ceiling = s iy \| l ih ng` | On a line of its own, sets how a word is said everywhere in the lyrics. The right side can be phonemes, `[phonemes]`, or a respelling in plain words (`taxicab = tacksee cab`). Definition lines aren't sung and don't count toward LENGTH. They're saved with the lyrics, so they stay with your project. |
+| `sea-breakers`, `off-line` | Hyphenated compounds are read part by part. |
 | `Dai-sy` | Hyphens force where the syllables split. |
 | `[d ey \| z iy]` | Raw phonemes. `\|` splits syllables. DECtalk-style `[dey ziy]` also works. |
-| `PHP`, `NASA` | All-caps words of 2 to 5 letters are spelled letter by letter ("pee aitch pee"). Toggle with **ABC**. Single letters like `I` and `A` stay words. |
+| `NSA`, `NASA` | All-caps words of 2 to 5 letters are spelled letter by letter ("en ess ay"), unless the dictionary says them as a word (NASA, CERT). Toggle with **ABC**. Single letters like `I` and `A` stay words. To make an acronym a word, define it: `CISA = s ih \| s ax`. |
 | `,` `;` `:` `.` `!` `?` | Each mark is one rest. In Notes mode it uses up one note in silence, so `....` rests for four notes. |
 | New line | Singing pauses until the next bar starts, then the next line begins on its downbeat. If a line already ends on the last beat, nothing is skipped. |
 | Numbers | Read digit by digit. |
@@ -156,9 +159,51 @@ The engine is a Klatt-style formant synthesizer:
 - **Consonants:** frication noise through parallel resonators.
 - **Transitions:** formant targets glide with per-phoneme timing, which is what makes consonants come across.
 
-Text goes through a pronunciation dictionary, then NRL-style letter-to-sound rules (Elovitz et al., 1976), then a syllabifier.
+Text goes through a small hand-tuned dictionary, then the CMU Pronouncing Dictionary, then NRL-style letter-to-sound rules (Elovitz et al., 1976) for words neither knows, then a syllabifier. See [About the technologies](#about-the-technologies) for where each piece comes from.
 
 The formant values for every phoneme are in `Source/engine/Phonemes.cpp`, which is handy if you want to recreate the sound with bandpass filters on a modular synth.
+
+## About the technologies
+
+Formant Daisy is a small rebuild of ideas from about 60 years of speech research. These are the pieces it stands on, roughly in the order they appeared.
+
+### Peterson and Barney's vowel measurements (1952)
+
+Gordon Peterson and Harold Barney at Bell Labs recorded 76 speakers saying ten English vowels and measured their formant frequencies ("Control methods used in a study of the vowels", JASA, 1952). Their averages became the standard reference for where each vowel sits, and the vowel targets in `Phonemes.cpp` start from them. The plugin's formant chart, with F1 down and F2 left, is the same kind of plot they made.
+
+### Gunnar Fant and the source-filter model (1960)
+
+Swedish engineer Gunnar Fant's *Acoustic Theory of Speech Production* (1960) described the voice as a sound source (the vocal cords) shaped by a filter (the throat, mouth and nose). Every formant synthesizer, including this one, is built on that idea: make a buzz, then filter it.
+
+### Daisy Bell on the IBM 7094 (1961)
+
+In 1961 at Bell Labs in Murray Hill, New Jersey, John L. Kelly Jr. and Carol Lochbaum programmed an IBM 7094 to sing "Daisy Bell", with accompaniment by computer music pioneer Max Mathews. It's the earliest known recording of a computer-synthesized voice singing a song. Arthur C. Clarke saw the demo, and that's why HAL 9000 sings "Daisy" as it shuts down in *2001: A Space Odyssey* (1968). It's also why this plugin is called Formant Daisy and loads the song by default.
+
+### ARPAbet (1970s)
+
+ARPAbet is a way of writing English sounds with plain ASCII letters (`iy`, `ey`, `sh`, `ng`), created for the ARPA speech research program in the 1970s. The plugin's phoneme names, the `[d ey | z iy]` bracket syntax and the CMU dictionary all use it.
+
+### NRL letter-to-sound rules (1976)
+
+Honey Sue Elovitz, Rodney Johnson, Astrid McHugh and John Shore at the US Naval Research Laboratory wrote a few hundred rules for turning English spelling into sounds ("Automatic translation of English text to phonetics by means of letter-to-sound rules", NRL Report 7948, 1976). Each rule looks at a letter group and the letters around it. Early text-to-speech systems used rule sets like this. Formant Daisy uses them for words that aren't in any dictionary, like new names and made-up words.
+
+### Dennis H. Klatt and the Klatt synthesizer (1980)
+
+[Dennis H. Klatt](https://en.wikipedia.org/wiki/Dennis_H._Klatt) (1938 to 1988) was a speech scientist at MIT and a pioneer of computer speech synthesis. His paper "Software for a cascade/parallel formant synthesizer" (JASA, 1980) described a synthesizer with formant resonators in series for vowels and in parallel for consonants. It became the standard design for formant synthesis, and Formant Daisy's engine follows it. Klatt's text-to-speech work (known as MITalk and KlattTalk) was developed into DECtalk. Later, with Laura Klatt, he improved the voice source. Their glottal pulse model, KLGLOTT88, is the "glottal" end of the plugin's VOICE knob. He received the Acoustical Society of America's Silver Medal in Speech Communication in 1987. He lost his own voice to cancer before his death.
+
+### DECtalk (1984)
+
+Digital Equipment Corporation turned Klatt's work into DECtalk, announced in December 1983 and shipped in early 1984. Its default voice, "Perfect Paul", is based on Klatt's own voice. Stephen Hawking's famous voice came from a synthesizer built on the same research, the CallText 5010, and he kept it for the rest of his life. DECtalk's phoneme notation, like `[dey ziy]`, is the second bracket style the plugin accepts.
+
+### The CMU Pronouncing Dictionary
+
+The [CMU Pronouncing Dictionary](https://github.com/cmusphinx/cmudict) (CMUdict) was made by the Speech Group at Carnegie Mellon University for speech recognition research. It lists over 134,000 English words with their North American pronunciations in ARPAbet, and marks which vowels are stressed. It's used in CMU Sphinx, the Festival speech synthesizer, the Natural Language Toolkit and several singing-voice synthesizers.
+
+Formant Daisy includes about 125,000 of its words: the ones made only of letters and apostrophes, with the first pronunciation listed for each. `tools/make_cmudict.py` packs them into `Source/engine/CmuDict.cpp`. When packing, unstressed "uh" becomes the schwa `ax`, and an unstressed "er" before another vowel becomes `ax r` (so "inspiration" sings as "in-spuh-ray-shun"). When the plugin reads the dictionary, it merges sung syllables like "ow-er" into one note when the spelling has only one vowel ("our", "hour", "fire"). The dictionary is © 1993-2015 Carnegie Mellon University and is used under its BSD-style license ([third_party/cmudict/LICENSE](third_party/cmudict/LICENSE)).
+
+### JUCE and VST3
+
+The plugin is built with [JUCE](https://juce.com), a C++ framework for audio apps and plugins. It uses the VST3 plugin format created by Steinberg, so it loads in most DAWs. [pluginval](https://github.com/Tracktion/pluginval) by Tracktion checks every build.
 
 ## Building from source
 
@@ -185,16 +230,28 @@ The `render_daisy` tool (built by default, no JUCE needed) renders the chorus to
 render_daisy out.wav [bpm] [voice 0..1] ["lyrics"]
 ```
 
+To see how every word of a lyric will be sung (syllables and phonemes), build and run the pronunciation checker:
+
+```
+g++ -std=c++17 -O1 -ISource tools/pron_check.cpp Source/engine/Phonemes.cpp Source/engine/TextToPhonemes.cpp Source/engine/CmuDict.cpp -o pron_check
+./pron_check tests/ode.txt
+```
+
+To update the dictionary, download `cmudict.dict` from [cmusphinx/cmudict](https://github.com/cmusphinx/cmudict) and run `python3 tools/make_cmudict.py cmudict.dict`.
+
 ### Source layout
 
 ```
 Source/engine/       plain C++17 sound engine, no JUCE
   Phonemes.*         phoneme table (formants, bandwidths, noise shapes)
-  TextToPhonemes.*   dictionary, letter-to-sound rules, syllables, rests, line breaks
+  TextToPhonemes.*   dictionaries, word definitions, letter-to-sound rules, syllables, rests, line breaks
+  CmuDict.*          the packed CMU Pronouncing Dictionary (generated by tools/make_cmudict.py)
   FormantSinger.*    synthesis and note/tempo sequencing
 Source/Plugin*.*     JUCE processor and pixel-art editor
 Source/PixelFont.*   hand-drawn 5x7 bitmap font
-tools/               test renderers, MIDI generator, screenshot tool
+tools/               test renderers, MIDI generator, screenshot tool, dictionary packer, pronunciation checker
+tests/               lyric texts for pronunciation checks
+third_party/         licenses for bundled data
 docs/images/         README screenshots
 ```
 
@@ -225,6 +282,10 @@ The workflow fails if the tag doesn't match the version in `CMakeLists.txt`. You
 
 - Visual style inspired by Bit Wonder's short "Formant Synthesis Makes Buzzes Sing".
 - D. H. Klatt, "Software for a cascade/parallel formant synthesizer", JASA 1980.
+- D. H. Klatt and L. C. Klatt, "Analysis, synthesis, and perception of voice quality variations among female and male talkers", JASA 1990 (the KLGLOTT88 glottal pulse).
+- G. E. Peterson and H. L. Barney, "Control methods used in a study of the vowels", JASA 1952.
+- G. Fant, *Acoustic Theory of Speech Production*, Mouton, 1960.
+- The [CMU Pronouncing Dictionary](https://github.com/cmusphinx/cmudict), Copyright (C) 1993-2015 Carnegie Mellon University, used under its BSD-style license ([third_party/cmudict/LICENSE](third_party/cmudict/LICENSE)). The license text is also included in every release zip.
 - Elovitz, Johnson, McHugh and Shore, "Automatic translation of English text to phonetics by means of letter-to-sound rules", NRL Report 7948, 1976.
 - "Daisy Bell" by Harry Dacre (1892) is in the public domain.
 - Built with [JUCE](https://juce.com).

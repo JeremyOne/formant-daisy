@@ -1,5 +1,6 @@
 // Renders lyrics as a run of equal notes (Notes mode), for listening tests.
-//   render_lyrics out.wav "lyrics" [bpm] [beatsPerNote] [gate 0..1]
+//   render_lyrics out.wav "lyrics" [bpm] [beatsPerNote] [gate 0..1] [passes]
+// The lyrics can also be read from a file: render_lyrics out.wav @file.txt ...
 #include "engine/FormantSinger.h"
 #include <cstdio>
 #include <cstdlib>
@@ -12,11 +13,18 @@ int main (int argc, char** argv)
     const int sr = 48000;
     const char* out = argc > 1 ? argv[1] : "lyrics.wav";
     std::string text = argc > 2 ? argv[2] : "Project Mammoth Is the best.";
+    if (! text.empty() && text[0] == '@')
+    {
+        std::string body;
+        if (FILE* in = std::fopen (text.c_str() + 1, "rb")) { char buf[4096]; size_t n; while ((n = std::fread (buf, 1, sizeof buf, in)) > 0) body.append (buf, n); std::fclose (in); }
+        text = body;
+    }
+    const int passes = argc > 6 ? std::atoi (argv[6]) : 3;
     double bpm = argc > 3 ? std::atof (argv[3]) : 120, beats = argc > 4 ? std::atof (argv[4]) : 0.5, gate = argc > 5 ? std::atof (argv[5]) : 0.85;
     auto L = std::make_shared<fd::Lyrics> (fd::parseLyrics (text));
     fd::FormantSinger s; s.prepare (sr); fd::SingerParams p; p.gain = 0.6f; s.setParams (p); s.setLeadSamples (sr * 60 / 1000); s.setLyrics (L);
     const int notes[] = { 60, 62, 64, 65, 67, 65, 64, 62 };
-    const double spb = sr * 60.0 / bpm; const int count = L->singableCount() * 3;
+    const double spb = sr * 60.0 / bpm; const int count = L->noteLength() * passes;
     std::vector<float> a ((size_t) ((count * beats + 1) * spb));
     for (int k = 0; k < count; ++k)
     {

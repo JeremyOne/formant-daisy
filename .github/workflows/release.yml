@@ -70,7 +70,9 @@ jobs:
           NAME=FormantDaisy-$VERSION-${{ matrix.platform }}
           ART=build/FormantDaisy_artefacts/Release
           mkdir -p dist
-          (cd "$ART/VST3" && cmake -E tar cf "$GITHUB_WORKSPACE/dist/$NAME-VST3.zip" --format=zip "Formant Daisy.vst3")
+          cp THIRD_PARTY_NOTICES.txt "$ART/VST3/"
+          cp THIRD_PARTY_NOTICES.txt "$ART/Standalone/"
+          (cd "$ART/VST3" && cmake -E tar cf "$GITHUB_WORKSPACE/dist/$NAME-VST3.zip" --format=zip "Formant Daisy.vst3" THIRD_PARTY_NOTICES.txt)
           (cd "$ART/Standalone" && cmake -E tar cf "$GITHUB_WORKSPACE/dist/$NAME-Standalone.zip" --format=zip .)
           ls -la dist
 
