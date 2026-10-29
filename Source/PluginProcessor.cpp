@@ -317,6 +317,7 @@ void FormantDaisyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         {
             singer.setLyrics (pendingLyrics);
             pendingLyrics.reset();
+            lyricsChanged = true;
         }
     }
 
@@ -343,7 +344,8 @@ void FormantDaisyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     if (auto* ph = getPlayHead())
         if (auto pos = ph->getPosition())
             playing = pos->getIsPlaying();
-    if (playing && ! wasPlaying && pRestartOnPlay->load() > 0.5f)
+    const bool started = playing && ! wasPlaying;
+    if (started && pRestartOnPlay->load() > 0.5f)
         doRestart = true;
     if (! playing && wasPlaying)
         singer.releaseAll (0);
@@ -352,6 +354,24 @@ void FormantDaisyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         singer.restart();
 
     updateClock (numSamples);
+
+    // bar markers: follow the song position. On play, a jump or a loop, find the
+    // section for this bar (silent until the next marker if we're mid-section).
+    {
+        const bool markers = playing && singer.hasSections();
+        singer.setSectionSync (markers);
+        const bool jumped = playing && ! started && expectedPpq >= 0.0 && std::abs (clkPpqStart - expectedPpq) > 0.05;
+        if (markers && (started || jumped || lyricsChanged || doRestart))
+        {
+            const double rel = clkPpqStart - clkOrigin;
+            const double inBar = rel - std::floor (rel / clkQpb) * clkQpb;
+            const bool atBarStart = inBar < 0.1 || inBar > clkQpb - 0.1;
+            if (jumped) singer.releaseAll (0);
+            singer.locate (barAt (0), atBarStart);
+        }
+        lyricsChanged = false;
+        expectedPpq = playing ? clkPpqStart + numSamples * clkPpqPerSample : -1.0;
+    }
 
     const bool tempoMode = pMode->load() > 0.5f;
     if (tempoMode)

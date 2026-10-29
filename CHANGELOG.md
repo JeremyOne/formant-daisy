@@ -2,6 +2,14 @@
 
 The minor version goes up with every change. Tag `vX.Y.Z` to publish a release.
 
+## 0.15.0
+
+- Bar markers: a line like `-bar.12-` pins the lyrics after it to bar 12. Start playback from any bar, loop or jump, and the singing follows the song position. Starting in the middle of a section stays silent until the next marker, so it never sings the wrong words. Each section starts on its bar even if the one before it ran long.
+- The bar display shows `WAIT FOR BAR n` while waiting for a marker.
+- New README section on timing, with examples.
+- The help panel has a clickable FULL GUIDE link to the README on GitHub, and a line about bar markers.
+- `tools/section_test.cpp` checks the bar-marker behavior.
+
 ## 0.14.0
 
 - Much better pronunciation: the CMU Pronouncing Dictionary (about 125,000 words) is now built in.

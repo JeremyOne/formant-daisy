@@ -97,6 +97,9 @@ void FormantSinger::restart()
     restCounter = 0;
     waitUntilBar = lastNoteBar = noBar;
     vizWaiting.store (false);
+    vizWaitBar.store (-1);
+    curSection = -1;
+    sectionSilent = false;
     currentSyl = -1;
     lastScheduledSyl = -1;
     vizSyllable.store (-1);
@@ -264,11 +267,76 @@ int64_t FormantSinger::estimateCoda (int syl) const
 
 //==============================================================================
 // Sequencing
+int FormantSinger::sectionFor (int64_t bar) const
+{
+    int found = -1;
+    const auto& S = lyrics->sections;
+    for (int i = 0; i < (int) S.size() && S[(size_t) i].bar <= bar; ++i) found = i;
+    return found;
+}
+
+int FormantSinger::sectionEnd (int section) const
+{
+    const auto& S = lyrics->sections;
+    return section + 1 < (int) S.size() ? S[(size_t) section + 1].firstSyl : (int) lyrics->syllables.size();
+}
+
+int FormantSinger::waitForSection (int nextSection)
+{
+    const auto& S = lyrics->sections;
+    vizWaiting.store (true);
+    vizWaitBar.store (nextSection >= 0 && nextSection < (int) S.size() ? (long long) S[(size_t) nextSection].bar : -1);
+    return -3;
+}
+
+void FormantSinger::locate (int64_t bar, bool atBarStart)
+{
+    restart();
+    if (! hasSections()) return;
+    const auto& S = lyrics->sections;
+    const int s = sectionFor (bar);
+    curSection = s;
+    if (s >= 0 && S[(size_t) s].bar == bar && atBarStart)
+    {
+        nextSyl = S[(size_t) s].firstSyl; // right at a marker: sing from it
+        sectionSilent = false;
+    }
+    else
+    {
+        // in the middle of a section (or before the first): we can't know which
+        // syllable we'd be on, so stay silent until the next marker
+        nextSyl = s >= 0 ? sectionEnd (s) : 0;
+        sectionSilent = true;
+        waitForSection (s + 1);
+    }
+}
+
 int FormantSinger::pickNextSyllable (bool tempoMode, int64_t bar)
 {
     if (! lyrics || lyrics->syllables.empty())
         return -1;
     const int n = (int) lyrics->syllables.size();
+
+    // bar markers: a new section starts when its bar arrives
+    const bool useSections = sectionSync && bar != noBar && hasSections();
+    int endSyl = n;
+    if (useSections)
+    {
+        const int s = sectionFor (bar);
+        if (s > curSection)
+        {
+            curSection = s;
+            nextSyl = lyrics->sections[(size_t) s].firstSyl;
+            waitUntilBar = noBar;
+            restCounter = 0;
+            sectionSilent = false;
+            vizWaiting.store (false);
+            vizWaitBar.store (-1);
+        }
+        if (curSection < 0 || sectionSilent)
+            return waitForSection (curSection + 1);
+        endSyl = sectionEnd (curSection);
+    }
 
     // after a line break, stay silent until the next bar starts
     if (waitUntilBar != noBar)
@@ -294,6 +362,8 @@ int FormantSinger::pickNextSyllable (bool tempoMode, int64_t bar)
 
     for (int guard = 0; guard < n + 1; ++guard)
     {
+        if (useSections && nextSyl >= endSyl)
+            return waitForSection (curSection + 1); // section done early: wait for the next marker
         if (nextSyl >= n)
         {
             if (! params.loop) return -1;
@@ -333,6 +403,7 @@ int FormantSinger::pickNextSyllable (bool tempoMode, int64_t bar)
             continue; // a line break never uses up a note itself
         }
         lastNoteBar = bar;
+        if (useSections) { vizWaiting.store (false); vizWaitBar.store (-1); }
         return idx;
     }
     return -1;

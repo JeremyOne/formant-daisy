@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cctype>
+#include <cstdlib>
 #include <cstring>
 #include <map>
 #include <optional>
@@ -1281,6 +1282,22 @@ std::optional<std::pair<std::string, std::string>> parseDefinition (const std::s
     if (key.empty()) return std::nullopt;
     return std::make_pair (key, rhs);
 }
+
+// "-bar.12-" (also "-bar 12-", "-bar:12-", any case) on a line of its own -> 12
+std::optional<long long> parseBarMarker (const std::string& line)
+{
+    std::string t;
+    for (char c : line)
+        if (! std::isspace ((unsigned char) c)) t += (char) std::tolower ((unsigned char) c);
+    if (t.size() < 6 || t.front() != '-' || t.back() != '-' || t.compare (1, 3, "bar") != 0) return std::nullopt;
+    std::string num = t.substr (4, t.size() - 5);
+    if (! num.empty() && (num[0] == '.' || num[0] == ':')) num.erase (0, 1);
+    if (num.empty() || num.size() > 6 || ! std::all_of (num.begin(), num.end(), [] (char c) { return std::isdigit ((unsigned char) c); }))
+        return std::nullopt;
+    const long long bar = std::atoll (num.c_str());
+    if (bar < 1) return std::nullopt;
+    return bar;
+}
 } // namespace
 
 //==============================================================================
@@ -1370,6 +1387,12 @@ Lyrics parseLyrics (const std::string& rawText, bool spellAcronyms)
                 user[def->first] = def->second;
                 continue;
             }
+            if (auto bar = parseBarMarker (line))
+            {
+                // \x01 + number + \x01: picked up by the tokenizer below, sings nothing
+                text += '\x01' + std::to_string (*bar) + '\x01';
+                continue;
+            }
             if (! first) text += '\n';
             text += line;
             first = false;
@@ -1411,6 +1434,15 @@ Lyrics parseLyrics (const std::string& rawText, bool spellAcronyms)
     {
         tagLines();
         const char c = text[i];
+        if (c == '\x01')
+        {
+            size_t j = text.find ('\x01', i + 1);
+            if (j == std::string::npos) j = n;
+            const long long bar = std::atoll (text.substr (i + 1, j - i - 1).c_str());
+            L.sections.push_back ({ bar - 1, (int) L.syllables.size() });
+            i = j + 1;
+            continue;
+        }
         if (c == '[')
         {
             size_t j = text.find (']', i + 1);
@@ -1471,6 +1503,21 @@ Lyrics parseLyrics (const std::string& rawText, bool spellAcronyms)
         ++i;
     }
     tagLines();
+    // bar markers: text before the first one starts at bar 1; markers must move
+    // forward in time (later ones that don't are ignored)
+    if (! L.sections.empty())
+    {
+        if (L.sections.front().firstSyl > 0)
+            L.sections.insert (L.sections.begin(), Section { 0, 0 });
+        std::vector<Section> ordered;
+        for (auto& sec : L.sections)
+        {
+            if (! ordered.empty() && sec.bar <= ordered.back().bar) continue;
+            if (! ordered.empty() && sec.firstSyl == ordered.back().firstSyl) ordered.pop_back(); // empty section
+            ordered.push_back (sec);
+        }
+        L.sections = ordered;
+    }
     // drop a trailing line-break rest; keep trailing punctuation (it rests before looping)
     while (! L.syllables.empty() && L.syllables.back().rest && ! L.syllables.back().noteRest
            && ! L.syllables.back().lineBreak) // a trailing newline waits for the bar before looping

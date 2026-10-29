@@ -137,6 +137,8 @@ private:
     bool compact = false;
     int themeId = 0, robotStyle = 0;
     juce::Rectangle<float> robotHitArea() const;
+    juce::Rectangle<float> helpLinkArea; // README link on the help panel (empty when hidden)
+    static constexpr const char* readmeUrl = "https://github.com/JeremyOne/formant-daisy/";
     float robotScale = 4.0f;
     int frame = 0;
 

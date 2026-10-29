@@ -57,6 +57,13 @@ public:
     void releaseAll (int offset);
     void setPitchBend (float semitones) { bendSemis = semitones; }
     void restart();
+    // Bar markers (Lyrics::sections). While sync is on, each section starts at its
+    // bar no matter where the previous one got to. locate() is called when playback
+    // starts or jumps: at the very start of a section's bar that section sings;
+    // anywhere else the singer stays silent until the next marker.
+    void setSectionSync (bool on) { sectionSync = on; }
+    bool hasSections() const { return lyrics && ! lyrics->sections.empty(); }
+    void locate (int64_t bar, bool atBarStart);
     bool anyNoteHeld() const { return heldCount > 0; }
     int topHeldNote() const { return heldCount > 0 ? held[(size_t) heldCount - 1] : -1; }
 
@@ -75,6 +82,7 @@ public:
     std::atomic<int> vizSyllable { -1 }, vizPhoneme { 0 };
     std::atomic<int> vizRestCount { 0 };
     std::atomic<bool> vizWaiting { false }; // paused at a line break until the next bar // increments every time a rest is consumed
+    std::atomic<long long> vizWaitBar { -1 }; // 0-based bar of the marker it's waiting for, or -1
 
 private:
     struct Frame
@@ -160,6 +168,11 @@ private:
     int nextSyl = 0;
     int restCounter = 0;
     int64_t waitUntilBar = noBar, lastNoteBar = noBar;
+    bool sectionSync = false, sectionSilent = false;
+    int curSection = -1;
+    int sectionFor (int64_t bar) const;
+    int sectionEnd (int section) const;
+    int waitForSection (int nextSection); // marks the wait for the display, returns -3
     int currentSyl = -1;
     int lastScheduledSyl = -1;
     int currentNucleus = -1;

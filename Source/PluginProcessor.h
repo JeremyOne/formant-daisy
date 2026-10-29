@@ -91,6 +91,8 @@ private:
     int64_t clkBarBase = 0;
     int clkNum = 4, clkDen = 4;
     bool wasPlaying = false;
+    double expectedPpq = -1.0;     // where the next block should start if playback runs on
+    bool lyricsChanged = false;    // new lyrics arrived: re-find the bar-marker section
     bool lastRestartParam = false;
 
     // viz ring buffer

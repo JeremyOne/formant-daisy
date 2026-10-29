@@ -310,13 +310,19 @@ Rectangle<float> FormantDaisyEditor::robotHitArea() const
 
 void FormantDaisyEditor::mouseDown (const MouseEvent& e)
 {
+    if (showHelp && ! compact && helpLinkArea.contains (e.position))
+    {
+        URL (readmeUrl).launchInDefaultBrowser(); // the full guide on GitHub
+        return;
+    }
     if (robotHitArea().contains (e.position))
         setRobot (robotStyle + 1); // click Daisy for the next robot
 }
 
 void FormantDaisyEditor::mouseMove (const MouseEvent& e)
 {
-    setMouseCursor (robotHitArea().contains (e.position) ? MouseCursor::PointingHandCursor : MouseCursor::NormalCursor);
+    const bool overLink = showHelp && ! compact && helpLinkArea.contains (e.position);
+    setMouseCursor (overLink || robotHitArea().contains (e.position) ? MouseCursor::PointingHandCursor : MouseCursor::NormalCursor);
 }
 
 void FormantDaisyEditor::setCompact (bool shouldBeCompact)
@@ -889,8 +895,11 @@ void FormantDaisyEditor::drawVowelChart (Graphics& g, Rectangle<float> a)
         PixelFont::draw (g, barText, tx, by, 1.0f, Palette::cream.withAlpha (0.8f * alpha));
         if (waiting)
         {
-            tx -= PixelFont::width ("WAIT ", 1.0f) + 4;
-            PixelFont::draw (g, "WAIT", tx, by, 1.0f, Palette::pink);
+            // waiting for a bar marker shows which bar it's waiting for
+            const long long wb = proc.getSinger().vizWaitBar.load();
+            const String w = wb >= 0 ? "WAIT FOR BAR " + String (wb + 1) : String ("WAIT");
+            tx -= PixelFont::width (w + " ", 1.0f) + 4;
+            PixelFont::draw (g, w, tx, by, 1.0f, Palette::pink);
         }
     }
 
@@ -916,9 +925,9 @@ void FormantDaisyEditor::drawHelp (Graphics& g, Rectangle<float> a)
         "  LINE SETS HOW A WORD IS SAID",
         ", . ! ? = ONE REST NOTE EACH",
         "NEW LINE = WAIT FOR THE NEXT BAR",
+        "-BAR.12- = NEXT LINES START AT BAR 12",
         "ABC = SPELL CAPS ACRONYMS (PHP)",
-        "LEAD = CONSONANTS START EARLY SO",
-        "  VOWELS LAND ON THE BEAT",
+        "LEAD = CONSONANTS BEFORE THE BEAT",
     };
     const float step = jmin (18.0f, (a.getHeight() - 22.0f) / (float) std::size (lines));
     float y = a.getY() + 12;
@@ -927,6 +936,15 @@ void FormantDaisyEditor::drawHelp (Graphics& g, Rectangle<float> a)
         PixelFont::draw (g, l, a.getX() + 16, y, 2.0f, String (l) == "HOW TO SING" ? Palette::orange : Palette::cream);
         y += step;
     }
+
+    // clickable link to the full README, on the title line
+    const String link = "FULL GUIDE: GITHUB.COM/JEREMYONE/FORMANT-DAISY";
+    const float lw = PixelFont::width (link, 1.0f);
+    const float lx = a.getRight() - 16 - lw, ly = a.getY() + 16;
+    PixelFont::draw (g, link, lx, ly, 1.0f, Palette::blue);
+    g.setColour (Palette::blue.withAlpha (0.7f));
+    g.fillRect (lx, ly + 9, lw, 1.0f);
+    helpLinkArea = { lx - 4, ly - 4, lw + 8, 18 };
 }
 
 void FormantDaisyEditor::drawSpectrum (Graphics& g, Rectangle<float> a)

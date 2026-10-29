@@ -10,6 +10,8 @@
 //   hyphen syllable hints   Dai-sy    (forces where syllables split)
 //   punctuation rests       , ; :  = 1 step rest,  . ! ? and newlines = 2 steps
 //   raw phonemes            [d ey | z iy]   or DECtalk style [dey ziy]
+//   bar markers             -bar.12-  on its own line: what follows starts at bar 12
+//   word definitions        ceiling = s iy | l ih ng  on its own line
 //                           ('|' or '-' splits syllables inside brackets)
 #pragma once
 #include <string>
@@ -32,10 +34,20 @@ struct Syllable
     bool lineBreak = false; // a newline follows here: singing waits for the next bar
 };
 
+// A bar marker ("-bar.12-") pins the lyrics after it to a bar of the song.
+struct Section
+{
+    long long bar = 0; // 0-based bar index (bar 1 = 0)
+    int firstSyl = 0;  // first syllable of the section
+};
+
 struct Lyrics
 {
     std::vector<Syllable> syllables;
     std::vector<std::string> words;
+    // Empty when the lyrics have no bar markers. Otherwise sorted by bar and by
+    // syllable; text before the first marker becomes a section at bar 1.
+    std::vector<Section> sections;
     int singableCount() const;
     int noteLength() const; // notes needed for one pass in Notes mode (syllables + punctuation rests)
     // Steps for one pass: Notes mode = 1 per syllable or punctuation; Tempo mode
