@@ -1,0 +1,126 @@
+diff --git a/firmware/src/core.h b/firmware/src/core.h
+index 2c1b980..9f02228 100644
+--- a/firmware/src/core.h
++++ b/firmware/src/core.h
+@@ -35,11 +35,22 @@
+ #if FELUCCA_ADPCM && !FELUCCA_SLICE
+ #error "FELUCCA_ADPCM needs FELUCCA_SLICE (ADPCM is engine 14, after SLICE)"
+ #endif
++#ifndef FELUCCA_DAISY
++#define FELUCCA_DAISY 1          /* DAISY (eng_daisy.c, Formant Daisy's singer), engine 15; 14 is ADPCM or reserved */
++#endif
++#if FELUCCA_DAISY && !FELUCCA_SLICE
++#error "FELUCCA_DAISY needs FELUCCA_SLICE (DAISY is engine 15, after SLICE and ADPCM's 14)"
++#endif
++#if FELUCCA_DAISY
++#define NENGINES 16              /* ... SLICE (13), ADPCM or reserved (14), DAISY (15) */
++#define ENGI_DAISY 15u
++#else
+ #define NENGINES (13 + FELUCCA_SLICE + FELUCCA_ADPCM)   /* SLICE (13), then ADPCM (14): the other engines keep their
+                                                          * numbers */
++#endif
+ #define ENGI_ADPCM 14u
+ #define ENGI_DIGITAL 1u          /* reserved without FELUCCA_FM4: never selectable (eng_ok), its sounds load as FM6 */
+-#define NENG_SHOWN (NENGINES - !FELUCCA_FM4)   /* the engines one can pick: PRESETS, the EDIT layer, the editor,
++#define NENG_SHOWN (NENGINES - !FELUCCA_FM4 - (FELUCCA_DAISY && !FELUCCA_ADPCM))   /* the engines one can pick: PRESETS, the EDIT layer, the editor,
+                                                 * in the display order of engines.c ENGINE_ORDER */
+ #define UP_SLOTS 32u             /* user presets (upreset.c) */
+ 
+diff --git a/firmware/src/editor.c b/firmware/src/editor.c
+index 3ab73de..2253e32 100644
+--- a/firmware/src/editor.c
++++ b/firmware/src/editor.c
+@@ -912,7 +912,15 @@ static void ed_service(void)
+     const uint8_t *p;
+     uint32_t n;
+     ed_sync();                                             /* v2 pushes (while watched) */
+-    if (!ota_frame_get(&p, &n) || n < 4u || p[0] != ED_HDR0 || p[1] != ED_HDR1 || p[2] != ED_HDR2)
++    if (!ota_frame_get(&p, &n))
++        return;
++#if FELUCCA_DAISY
++    if (daisy_sysex(p, n)) {                               /* DAISY's lyric upload (7D 44 46 ..) */
++        ota_frame_done();
++        return;
++    }
++#endif
++    if (n < 4u || p[0] != ED_HDR0 || p[1] != ED_HDR1 || p[2] != ED_HDR2)
+         return;
+     ed_w.last_ms = fm1_ms;                                 /* any request keeps WATCH alive */
+     if (p[3] >= ED_SMP_BEGIN) {                            /* large frames: handled in place, then freed */
+diff --git a/firmware/src/engines.c b/firmware/src/engines.c
+index af4e4c6..2978c95 100644
+--- a/firmware/src/engines.c
++++ b/firmware/src/engines.c
+@@ -44,6 +44,9 @@ static uint8_t eng_mem_owner[NPART];       /* engine index + 1 whose state is in
+ #if FELUCCA_SLICE
+ #include "eng_slice.c"
+ #endif
++#if FELUCCA_DAISY
++#include "eng_daisy.c"           /* DAISY: Formant Daisy's singer (daisy_fx.c, integer port of the plugin's engine) */
++#endif
+ #if FELUCCA_ADPCM
+ #include "eng_adpcm.c"           /* ADPCM: BRR waves and an FIR echo, its DSP ported from snes_spc (adpcm_dsp.c, LGPL-2.1+) */
+ #endif
+@@ -72,6 +75,11 @@ static const engine_t *const ENGINES[NENGINES] = {
+ #endif
+ #if FELUCCA_ADPCM
+     &ENG_ADPCM,                  /* 14 (ENGI_ADPCM; FELUCCA_ADPCM=0 builds without it) */
++#elif FELUCCA_DAISY
++    &ENG_RESERVED14,             /* 14: reserved for ADPCM (never offered) */
++#endif
++#if FELUCCA_DAISY
++    &ENG_DAISY,                  /* 15 (ENGI_DAISY) */
+ #endif
+ };
+ 
+@@ -136,11 +144,17 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
+ #if FELUCCA_ADPCM
+     14,                          /* ADPCM (1.8): last, so the EDIT layer's white keys keep the 13 above (ui_layer.c LY_ENG_KEYS) */
+ #endif
++#if FELUCCA_DAISY
++    15,                          /* DAISY */
++#endif
+ };
+ 
+ /* the engines one can pick (engine 1 only with FELUCCA_FM4), in ENGINE_ORDER: eng_ok(e), the n-th of them
+  * eng_vis(n), e's place among them eng_rank(e), the next / previous one eng_step(e, dir) (wraps) */
+-static int eng_ok(uint32_t e) { return e < NENGINES && (FELUCCA_FM4 || e != ENGI_DIGITAL); }
++static int eng_ok(uint32_t e)
++{
++    return e < NENGINES && (FELUCCA_FM4 || e != ENGI_DIGITAL) && (FELUCCA_ADPCM || !FELUCCA_DAISY || e != 14u);
++}
+ static uint32_t eng_vis(uint32_t n) { return ENGINE_ORDER[n % NENG_SHOWN]; }
+ static uint32_t eng_rank(uint32_t e)
+ {
+diff --git a/firmware/src/fx.c b/firmware/src/fx.c
+index d2bcf92..497ca21 100644
+--- a/firmware/src/fx.c
++++ b/firmware/src/fx.c
+@@ -872,6 +872,11 @@ static const uint16_t ENG_VCOST[NENGINES] = {163, FELUCCA_FM4 ? 181 : 0, 162, 67
+ #endif
+ #if FELUCCA_ADPCM
+                                              168,      /* ADPCM (ORGAN, 1693 instructions / sample at 8 notes) */
++#elif FELUCCA_DAISY
++                                             0,        /* 14: reserved */
++#endif
++#if FELUCCA_DAISY
++                                             370,      /* DAISY: one singer, ~2.3 x an ANALOG voice (host timing, tests/daisy/cost.c) */
+ #endif
+ };
+ #endif
+diff --git a/firmware/src/midi_control.c b/firmware/src/midi_control.c
+index 2f586da..df33569 100644
+--- a/firmware/src/midi_control.c
++++ b/firmware/src/midi_control.c
+@@ -227,6 +227,11 @@ static const uint8_t MIDI_CC_ENG[NENGINES] = {
+ #endif
+ #if FELUCCA_ADPCM
+     0x00,                                             /* ADPCM - (no filter) */
++#elif FELUCCA_DAISY
++    0x00,                                             /* 14: reserved */
++#endif
++#if FELUCCA_DAISY
++    0x30,                                             /* DAISY FMNT */
+ #endif
+ };
+ /* a CC sets parameter id of track t as a knob would: 0..127 over its range */
