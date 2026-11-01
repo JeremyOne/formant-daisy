@@ -1,6 +1,6 @@
 # Formant Daisy on the M-VAVE FM-1 (experimental)
 
-FM-1 port 0.1.0. This branch puts Formant Daisy's singing robot on the M-VAVE FM-1 pocket synth, as a new engine
+FM-1 port 0.2.0. This branch puts Formant Daisy's singing robot on the M-VAVE FM-1 pocket synth, as a new engine
 called **DAISY** inside the [Felucca](https://github.com/hugelton/Felucca) custom firmware.
 
 **Status:** the engine runs inside Felucca's real firmware code on a computer (Felucca's emulator harness) and
@@ -98,7 +98,8 @@ flags  n_onset  onset[n_onset]  nucleus  n_coda  coda[n_coda]
 The fixed-point engine follows the plugin step for step: a Klatt-style cascade of formant resonators (signals in
 Q12, coefficients in Q30), a nasal antiresonator, a glottal pulse source with breath noise, and the same consonant
 timing, updated every 16 samples. Frequencies are kept as Hz × 16 and amplitudes in Q15. Square roots, cosines and
-bandwidth decays come from tables, so the audio path only multiplies, adds and shifts.
+bandwidth decays come from tables. There are no 64-bit divides (Felucca links no runtime library), and the
+only divides per sample are 32-bit ones, which the FM-1's CPU does in hardware.
 
 Memory: each part's singer lives in the part's engine memory (Felucca's `ENG_MEM`, about 12.9 KB a part); the
 uploaded lyric and its staging copy take 8 KB of the FM-1's POOL RAM.
@@ -108,7 +109,7 @@ uploaded lyric and its staging copy take 8 KB of the FM-1's POOL RAM.
 `tests/compare_plugin.cpp` (plugin vs port, Daisy Bell):
 
 ```
-F1 difference: median about 6 Hz      F2 difference: median about 3 Hz
+F1 difference: median about 6 Hz      F2 difference: median about 6 Hz
 loudness envelope correlation: 0.987  level, FM-1 vs plugin: +0.0 dB   peak 0.85
 ```
 
@@ -119,7 +120,14 @@ CPU: one DAISY singer costs about 2.3 times an ANALOG voice in host timing, so i
 is set to 370 (ANALOG is 163). This is the number to check on the hardware: if the FM-1 stutters with DAISY plus a
 busy song, raise `ENG_VCOST` for DAISY in `fx.c`.
 
-## Building the firmware
+## Getting a test firmware
+
+The easiest way: GitHub builds it. `.github/workflows/fm1-firmware.yml` runs on every push to `experimental/fm1`
+that changes the port (or by hand from the Actions tab). It fetches Felucca, the JieLi toolchain and the three SDK
+files, applies the port, builds, runs the emulator test, and uploads **felucca-daisy-fm1-test** to the run's
+artifacts: `felucca.fwsc` (the installable package), `felucca.bin` and a WAV of the emulator test.
+
+## Building the firmware yourself
 
 The JieLi toolchain and SDK only run on Linux x86-64 (or Docker on another system). Follow Felucca's `BUILDING.md`;
 the only extra step is applying this port:

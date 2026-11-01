@@ -6,7 +6,9 @@
  * bandwidths are Hz * 16. Amplitudes are Q15. */
 #include "daisy_fx.h"
 #include "daisy_fx_tables.h"
-#include <string.h>
+#ifndef DFX_NO_LIBC
+#include <string.h>                 /* (in Felucca: its own memset, firmware/bsp/chip/libc.c) */
+#endif
 
 #if DFX_FS != DFX_TABLE_FS
 #error "daisy_fx_tables.h was made for another sample rate"
@@ -24,7 +26,7 @@ static void dfx_pole(int32_t f16, int32_t b16, int32_t *b, int32_t *c)
 {
     int32_t pos, idx, fr, cosv, r;
     f16 = dfx_clampi(f16, 16 * 20, 16 * (DFX_FS * 45 / 100));
-    pos = (int32_t)(((int64_t)f16 * 32768) / DFX_FS);   /* (F / (FS / 2)) * 1024 * 256 */
+    pos = (int32_t)(((int64_t)f16 * 12466118) >> 24);   /* f16 * 32768 / FS: (F / (FS / 2)) * 1024 * 256 */
     idx = pos >> 8;
     fr = pos & 255;
     if (idx >= 1024) { idx = 1023; fr = 256; }
@@ -59,9 +61,16 @@ static void dfx_antires_set(dfx_antires_t *f, int32_t f16, int32_t b16)
     dfx_pole(f16, b16, &b, &c);
     a = DFX_Q30 - b - c;
     if (a < 600000) a = 600000;                          /* keeps 1 / A within Q20 int32 */
-    f->a = (int32_t)(((int64_t)1 << 50) / a);
-    f->b = (int32_t)(-((int64_t)b << 20) / a);
-    f->c = (int32_t)(-((int64_t)c << 20) / a);
+    {                                                    /* 2^50 / a with a 32-bit divide: a scaled to 16 bits */
+        uint32_t an = (uint32_t)a;
+        int k = 0;
+        int32_t inv;
+        while (an >= 65536u) { an >>= 1; k++; }
+        inv = (int32_t)(((uint32_t)1 << 31) / an) << (19 - k);   /* (2^31 / (a >> k)) * 2^(19 - k) */
+        f->a = inv;
+        f->b = -(int32_t)(((int64_t)b * inv) >> 30);
+        f->c = -(int32_t)(((int64_t)c * inv) >> 30);
+    }
 }
 
 static int32_t dfx_antires_run(dfx_antires_t *f, int32_t x)
@@ -464,7 +473,7 @@ static void dfx_control(dfx_singer_t *s)
     /* source tilt: a dfx_pole at 4500 - 2500 * VOICE Hz, coef = exp(-2 pi f / FS), Q15 (a cubic is close here) */
     {
         const int32_t hz = 4500 - 2500 * s->p.source / 256;
-        const int32_t x = (int32_t)((int64_t)hz * 205887 / DFX_FS);   /* 2 pi f / FS, Q15 */
+        const int32_t x = (int32_t)(((int64_t)hz * 4895423) >> 20);   /* 2 pi f / FS, Q15 */
         const int32_t x2 = (int32_t)(((int64_t)x * x) >> 15), x3 = (int32_t)(((int64_t)x2 * x) >> 15);
         s->tilt_coef = 32768 - x + x2 / 2 - x3 / 6;
     }
@@ -477,12 +486,13 @@ static void dfx_control(dfx_singer_t *s)
 static int32_t dfx_blep(int32_t t, int32_t dt)
 {
     if (dt <= 0) return 0;
+    if (dt > 65535) dt = 65535;
     if (t < dt) {
-        const int32_t x = (int32_t)(((int64_t)t << 16) / dt);
+        const int32_t x = (int32_t)(((uint32_t)t << 16) / (uint32_t)dt);
         return 2 * x - (int32_t)(((int64_t)x * x) >> 16) - 65536;
     }
     if (t > 65536 - dt) {
-        const int32_t x = (int32_t)(((int64_t)(t - 65536) << 16) / dt);
+        const int32_t x = -(int32_t)(((uint32_t)(65536 - t) << 16) / (uint32_t)dt);
         return (int32_t)(((int64_t)x * x) >> 16) + 2 * x + 65536;
     }
     return 0;
@@ -491,11 +501,11 @@ static int32_t dfx_blep(int32_t t, int32_t dt)
 /* tanh-like soft clip, Q12 in, Q12 out (x (27 + x^2) / (27 + 9 x^2)) */
 static int32_t dfx_soft_clip(int32_t x)
 {
-    int64_t x2;
+    int32_t x2;
     if (x > 3 * 4096) return 4096;
     if (x < -3 * 4096) return -4096;
-    x2 = ((int64_t)x * x) >> 12;
-    return (int32_t)(((int64_t)x * (27 * 4096 + x2)) / (27 * 4096 + 9 * x2));
+    x2 = (x * x) >> 12;                                  /* |x| <= 3: everything fits 32 bits */
+    return x * (27 * 4096 + x2) / (27 * 4096 + 9 * x2);
 }
 
 static uint32_t dfx_rnd(dfx_singer_t *s) { return s->rng = s->rng * 1664525u + 1013904223u; }
@@ -544,7 +554,7 @@ void dfx_render(dfx_singer_t *s, int32_t *out, uint32_t n)
                     glot += dfx_blep(tc, dt) / 2;
                 }
                 glot = glot * 8 / 5;                                           /* * 1.6 */
-                voice = (int32_t)(((int64_t)(256 - src) * saw * 7 / 10 + (int64_t)src * glot) >> 8);   /* Q16 */
+                voice = (int32_t)(((int64_t)((256 - src) * saw * 7 / 10) + (int64_t)src * glot) >> 8);   /* Q16 */
                 voice = (int32_t)(((int64_t)voice * av) >> 19);                 /* Q16 * Q15 -> Q12 */
 
                 n1 = (int32_t)(dfx_rnd(s) >> 20) - 2048;                           /* +-0.5, Q12 */

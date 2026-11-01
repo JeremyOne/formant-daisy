@@ -17,6 +17,7 @@
  *
  * The engine itself (daisy_fx.c) is the plugin's FormantSinger ported to
  * integer C; it is included here, as Felucca builds its engines as one unit. */
+#define DFX_NO_LIBC 1                     /* memset comes from Felucca (firmware/bsp/chip/libc.c) */
 #include "daisy_fx.c"
 #include "daisy_lyrics.h"
 

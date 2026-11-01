@@ -1,0 +1,68 @@
+name: FM-1 test firmware
+
+# Builds Felucca with the DAISY engine (ports/fm1) into an installable .fwsc for the
+# M-VAVE FM-1. Runs on a push to experimental/fm1 that touches the port, or by hand.
+# The firmware is in the run's artifacts: felucca-daisy-fm1-test.zip.
+on:
+  push:
+    branches: ['experimental/fm1']
+    paths: ['ports/fm1/**', '.github/workflows/fm1-firmware.yml']
+  workflow_dispatch:
+
+env:
+  FELUCCA_COMMIT: 406b328ee43ffb8fd3d2eb4cce1a741db4a4cea1   # what felucca-daisy.patch is made against
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Felucca source
+        run: |
+          git clone https://github.com/hugelton/Felucca.git felucca
+          git -C felucca checkout "$FELUCCA_COMMIT"
+          git -C felucca submodule update --init --recursive
+
+      - name: Python packages
+        run: pip3 install Pillow fonttools
+
+      - name: JieLi toolchain
+        run: felucca/tools/get_toolchain.sh "$HOME/.jieli"
+
+      - name: JieLi AC79 SDK (the three files the package needs)
+        run: |
+          SDK="$HOME/fw-AC79_AIoT_SDK"
+          URL=https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git
+          TAG=AC79NN_SDK_V1.2.1_2023-12-13
+          if git clone --depth 1 --branch "$TAG" --filter=blob:none --sparse "$URL" "$SDK"; then
+            git -C "$SDK" sparse-checkout set --no-cone /cpu/wl82/tools/uboot.boot /cpu/wl82/tools/cfg_tool.bin \
+              /cpu/wl82/tools/cfg/eq_cfg_hw.bin || true
+          fi
+          if [ ! -f "$SDK/cpu/wl82/tools/cfg/eq_cfg_hw.bin" ]; then   # no partial clone: the whole SDK
+            rm -rf "$SDK"
+            git clone --depth 1 --branch "$TAG" "$URL" "$SDK"
+          fi
+          ls -la "$SDK/cpu/wl82/tools/uboot.boot" "$SDK/cpu/wl82/tools/cfg_tool.bin" "$SDK/cpu/wl82/tools/cfg/eq_cfg_hw.bin"
+
+      - name: Add DAISY
+        run: ports/fm1/felucca/apply.sh felucca
+
+      - name: Build
+        working-directory: felucca
+        run: ./build.sh
+
+      - name: DAISY test in Felucca's emulator
+        working-directory: felucca/tests/daisy
+        run: |
+          cc -O2 -ffp-contract=off -w -I../../build/gen -I../../firmware/src -I../../firmware/hal \
+             -I../../firmware/bsp/chip -I../../firmware/bsp/boards/fm1 -o daisy_test felucca_daisy_test.c -lm
+          ./daisy_test daisy_emulator.wav
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: felucca-daisy-fm1-test
+          path: |
+            felucca/build/felucca.fwsc
+            felucca/build/felucca.bin
+            felucca/tests/daisy/daisy_emulator.wav
